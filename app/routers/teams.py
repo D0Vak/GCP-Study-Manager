@@ -1,0 +1,32 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import CurrentUser
+from app.database import get_db
+from app.models.user import User
+from app.schemas.team import TeamCreate, TeamMemberAdd, TeamResponse
+from app.schemas.user import UserResponse
+from app.services import team_service
+
+router = APIRouter(prefix="/teams", tags=["teams"], dependencies=[CurrentUser])
+
+
+@router.post("", response_model=TeamResponse, status_code=201)
+def create_team(data: TeamCreate, db: Session = Depends(get_db)):
+    return team_service.create_team(db, data)
+
+
+@router.get("", response_model=list[TeamResponse])
+def list_teams(db: Session = Depends(get_db)):
+    return team_service.list_teams(db)
+
+
+@router.post("/{team_id}/members", status_code=201)
+def add_member(team_id: int, data: TeamMemberAdd, db: Session = Depends(get_db)):
+    team_service.add_member(db, team_id, data.user_id)
+    return {"message": "メンバーを追加しました"}
+
+
+@router.get("/{team_id}/members", response_model=list[UserResponse])
+def list_members(team_id: int, db: Session = Depends(get_db)):
+    return team_service.list_members(db, team_id)

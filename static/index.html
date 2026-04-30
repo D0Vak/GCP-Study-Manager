@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>勉強会管理システム</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .login-card { width: 380px; border: none; box-shadow: 0 4px 24px rgba(0,0,0,.12); border-radius: 16px; }
+    .navbar-brand { font-weight: 700; letter-spacing: .05em; }
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 10px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .badge-scheduled { background: #0d6efd; }
+    .badge-done { background: #6c757d; }
+    .btn-yes { background: #198754; color: #fff; }
+    .btn-no  { background: #dc3545; color: #fff; }
+    #dev-banner { background: #fff3cd; border-bottom: 2px solid #ffc107; font-size: .85rem; padding: 6px 0; text-align: center; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #6c757d; color: #fff;
+                   display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<!-- ── Login Screen ─────────────────────────────────────────────────────── -->
+<div id="login-screen" style="display:none">
+  <div class="card login-card p-5 text-center">
+    <div class="mb-3" style="font-size:3rem">📚</div>
+    <h4 class="fw-bold mb-1">勉強会管理システム</h4>
+    <p class="text-muted small mb-4">チームの勉強会・出欠・通知を一元管理</p>
+    <a id="google-login-btn" href="/auth/google"
+       class="btn btn-light border fw-semibold d-flex align-items-center justify-content-center gap-2">
+      <img src="https://www.google.com/favicon.ico" width="18" height="18" alt="">
+      Googleでログイン
+    </a>
+    <p id="login-error" class="text-danger small mt-3" style="display:none"></p>
+  </div>
+</div>
+
+<!-- ── Dev Banner ──────────────────────────────────────────────────────── -->
+<div id="dev-banner" style="display:none">
+  🛠 Dev Mode — 認証なし（<code>GOOGLE_CLIENT_ID</code> 未設定）
+</div>
+
+<!-- ── Main App ─────────────────────────────────────────────────────────── -->
+<div id="app" style="display:none">
+  <nav class="navbar navbar-dark bg-dark px-4 mb-4">
+    <span class="navbar-brand">📚 勉強会管理</span>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-light btn-sm" onclick="showSection('dashboard')">ダッシュボード</button>
+      <button class="btn btn-outline-light btn-sm" onclick="showSection('teams')">チーム</button>
+      <button class="btn btn-outline-light btn-sm" onclick="showSection('events')">勉強会</button>
+      <button class="btn btn-outline-light btn-sm" onclick="showSection('attendance')">出欠</button>
+      <div id="user-info" class="d-flex align-items-center gap-2 ms-2">
+        <span id="user-avatar" class="user-avatar">?</span>
+        <span id="user-name" class="text-light small"></span>
+        <button class="btn btn-outline-danger btn-sm" onclick="logout()">ログアウト</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container pb-5">
+
+    <!-- ── Dashboard ── -->
+    <div id="dashboard" class="section active">
+      <h4 class="mb-3">ダッシュボード</h4>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 class="text-muted mb-3">次の勉強会</h6>
+            <select id="dash-team-select" class="form-select form-select-sm mb-3" onchange="loadNextEvent()">
+              <option value="">-- チームを選択 --</option>
+            </select>
+            <div id="next-event-card" class="text-muted small">チームを選択してください</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 class="text-muted mb-3">未回答人数</h6>
+            <div id="dash-no-response" class="text-muted small">次の勉強会を取得してください</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Teams ── -->
+    <div id="teams" class="section">
+      <h4 class="mb-3">チーム管理</h4>
+      <div class="row g-3">
+        <div class="col-md-5">
+          <div class="card p-4">
+            <h6 class="mb-3">チーム作成</h6>
+            <input id="team-name" class="form-control form-control-sm mb-2" placeholder="チーム名">
+            <input id="team-line-group" class="form-control form-control-sm mb-3" placeholder="LINEグループID（任意）">
+            <button class="btn btn-primary btn-sm" onclick="createTeam()">作成</button>
+          </div>
+
+          <div class="card p-4 mt-3">
+            <h6 class="mb-3">メンバー追加</h6>
+            <select id="member-team-select" class="form-select form-select-sm mb-2"></select>
+            <select id="member-user-select" class="form-select form-select-sm mb-3"></select>
+            <button class="btn btn-primary btn-sm" onclick="addMember()">追加</button>
+          </div>
+
+          <div class="card p-4 mt-3">
+            <h6 class="mb-3">ユーザー作成</h6>
+            <input id="user-name" class="form-control form-control-sm mb-2" placeholder="名前">
+            <input id="user-line-id" class="form-control form-control-sm mb-3" placeholder="LINE ID（任意）">
+            <button class="btn btn-secondary btn-sm" onclick="createUser()">作成</button>
+          </div>
+        </div>
+
+        <div class="col-md-7">
+          <div class="card p-4">
+            <h6 class="mb-3">チーム一覧</h6>
+            <div id="teams-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Events ── -->
+    <div id="events" class="section">
+      <h4 class="mb-3">勉強会管理</h4>
+      <div class="row g-3">
+        <div class="col-md-5">
+          <div class="card p-4">
+            <h6 class="mb-3">勉強会作成</h6>
+            <select id="event-team-select" class="form-select form-select-sm mb-2"></select>
+            <input id="event-title" class="form-control form-control-sm mb-2" placeholder="タイトル">
+            <input id="event-datetime" type="datetime-local" class="form-control form-control-sm mb-3">
+            <button class="btn btn-primary btn-sm" onclick="createEvent()">作成</button>
+          </div>
+        </div>
+        <div class="col-md-7">
+          <div class="card p-4">
+            <div class="d-flex align-items-center mb-3 gap-2">
+              <h6 class="mb-0">勉強会一覧</h6>
+              <select id="events-team-filter" class="form-select form-select-sm ms-auto" style="width:auto" onchange="loadEvents()">
+                <option value="">全チーム</option>
+              </select>
+            </div>
+            <div id="events-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Attendance ── -->
+    <div id="attendance" class="section">
+      <h4 class="mb-3">出欠管理</h4>
+      <div class="card p-4">
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <select id="att-event-select" class="form-select form-select-sm" style="max-width:320px" onchange="loadAttendance()">
+            <option value="">-- 勉強会を選択 --</option>
+          </select>
+          <div class="ms-auto d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" onclick="notifyNoResponse()">未回答者に通知</button>
+            <button class="btn btn-outline-primary btn-sm" onclick="notifySummary()">サマリー送信</button>
+          </div>
+        </div>
+        <div id="attendance-list"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast-container" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = 'study_mgr_token';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+function logout() {
+  clearToken();
+  window.location.reload();
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+async function bootstrap() {
+  // 1. OAuthコールバック後: URLに?token=xxxが付く
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlToken = urlParams.get('token');
+  if (urlToken) {
+    setToken(urlToken);
+    window.history.replaceState({}, '', '/');
+  }
+
+  // 2. 認証モードを取得
+  const { auth_enabled } = await fetch('/auth/mode').then(r => r.json());
+
+  if (!auth_enabled) {
+    // Dev mode
+    document.getElementById('dev-banner').style.display = 'block';
+    showApp({ name: 'Dev User', email: 'dev@localhost' });
+    return;
+  }
+
+  // 3. Tokenがあれば/auth/meで検証
+  const token = getToken();
+  if (token) {
+    try {
+      const me = await api('GET', '/auth/me');
+      showApp(me);
+      return;
+    } catch {
+      clearToken();
+    }
+  }
+
+  // 4. ログイン画面を表示
+  document.getElementById('login-screen').style.display = 'flex';
+
+  // URLにerrorパラメータがあればエラー表示
+  const err = urlParams.get('error');
+  if (err) {
+    const el = document.getElementById('login-error');
+    el.textContent = `ログインエラー: ${err}`;
+    el.style.display = 'block';
+  }
+}
+
+function showApp(user) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  // ユーザー情報を表示
+  const initial = (user.name || user.email || '?').charAt(0).toUpperCase();
+  document.getElementById('user-avatar').textContent = initial;
+  document.getElementById('user-name').textContent = user.name || user.email;
+
+  // 初期データロード
+  loadDashboardTeams();
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+
+async function api(method, path, body) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    clearToken();
+    toast('セッションが切れました。再ログインしてください。', 'warning');
+    setTimeout(() => window.location.reload(), 1500);
+    throw new Error('Unauthorized');
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : null;
+}
+
+// ── UI Helpers ────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast align-items-center text-bg-${type} border-0 show mb-2`;
+  el.setAttribute('role', 'alert');
+  el.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.closest('.toast').remove()"></button></div>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'dashboard')  loadDashboardTeams();
+  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); }
+  if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
+  if (id === 'attendance') loadAttendanceEventSelect();
+}
+
+function statusBadge(s) {
+  const m = { yes: ['success','参加'], no: ['danger','不参加'], pending: ['secondary','未回答'],
+              scheduled: ['primary','予定'], done: ['dark','完了'] };
+  const [cls, label] = m[s] || ['secondary', s];
+  return `<span class="badge bg-${cls}">${label}</span>`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+async function populateSelect(id, items, valKey, labelFn, addBlank = true) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = addBlank ? '<option value="">-- 選択 --</option>' : '';
+  (items || []).forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i[valKey];
+    opt.textContent = labelFn(i);
+    sel.appendChild(opt);
+  });
+  if (cur) sel.value = cur;
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+async function loadDashboardTeams() {
+  const teams = await api('GET', '/teams').catch(() => []);
+  await populateSelect('dash-team-select', teams, 'id', t => t.name);
+}
+
+async function loadNextEvent() {
+  const teamId = document.getElementById('dash-team-select').value;
+  if (!teamId) return;
+  const card = document.getElementById('next-event-card');
+  const noRespEl = document.getElementById('dash-no-response');
+  try {
+    const ev = await api('GET', `/events/next?team_id=${teamId}`);
+    if (!ev) {
+      card.innerHTML = '<span class="text-muted">予定された勉強会はありません</span>';
+      noRespEl.textContent = '-';
+      return;
+    }
+    card.innerHTML = `
+      <div class="fw-bold fs-5">${ev.title}</div>
+      <div class="text-muted">${fmtDate(ev.scheduled_at)}</div>
+      <div class="mt-2">${statusBadge(ev.status)}</div>`;
+    const noResp = await api('GET', `/events/${ev.id}/attendance/no-response`);
+    noRespEl.innerHTML = `<span class="fs-1 fw-bold text-danger">${noResp.length}</span> 人が未回答`;
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+
+async function loadTeamsList() {
+  const [teams, users] = await Promise.all([
+    api('GET', '/teams').catch(() => []),
+    api('GET', '/users').catch(() => []),
+  ]);
+  await populateSelect('member-team-select', teams, 'id', t => t.name);
+  await populateSelect('event-team-select', teams, 'id', t => t.name);
+  await populateSelect('member-user-select', users, 'id', u => u.name);
+
+  const el = document.getElementById('teams-list');
+  if (!teams.length) { el.innerHTML = '<p class="text-muted small">チームがありません</p>'; return; }
+
+  el.innerHTML = '';
+  for (const t of teams) {
+    const members = await api('GET', `/teams/${t.id}/members`).catch(() => []);
+    el.innerHTML += `
+      <div class="border rounded p-3 mb-2">
+        <div class="fw-bold">${t.name}</div>
+        <div class="text-muted small">LINE Group: ${t.line_group_id || '未設定'}</div>
+        <div class="mt-2">
+          ${members.map(m => `<span class="badge bg-light text-dark border me-1">${m.name}</span>`).join('')
+            || '<span class="text-muted small">メンバーなし</span>'}
+        </div>
+      </div>`;
+  }
+}
+
+async function loadUsersForSelect() {
+  const users = await api('GET', '/users').catch(() => []);
+  await populateSelect('member-user-select', users, 'id', u => u.name);
+}
+
+async function createTeam() {
+  const name = document.getElementById('team-name').value.trim();
+  const line_group_id = document.getElementById('team-line-group').value.trim() || null;
+  if (!name) { toast('チーム名を入力してください', 'warning'); return; }
+  try {
+    await api('POST', '/teams', { name, line_group_id });
+    toast('チームを作成しました');
+    document.getElementById('team-name').value = '';
+    document.getElementById('team-line-group').value = '';
+    loadTeamsList();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function addMember() {
+  const team_id = document.getElementById('member-team-select').value;
+  const user_id = document.getElementById('member-user-select').value;
+  if (!team_id || !user_id) { toast('チームとユーザーを選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/teams/${team_id}/members`, { user_id: Number(user_id) });
+    toast('メンバーを追加しました');
+    loadTeamsList();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function createUser() {
+  const name = document.getElementById('user-name').value.trim();
+  const line_id = document.getElementById('user-line-id').value.trim() || null;
+  if (!name) { toast('名前を入力してください', 'warning'); return; }
+  try {
+    await api('POST', '/users', { name, line_id });
+    toast('ユーザーを作成しました');
+    document.getElementById('user-name').value = '';
+    document.getElementById('user-line-id').value = '';
+    loadUsersForSelect();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+async function loadEventsTeamSelects() {
+  const teams = await api('GET', '/teams').catch(() => []);
+  await populateSelect('event-team-select', teams, 'id', t => t.name);
+  await populateSelect('events-team-filter', teams, 'id', t => t.name);
+}
+
+async function loadEvents() {
+  const teamId = document.getElementById('events-team-filter')?.value || null;
+  const q = teamId ? `?team_id=${teamId}` : '';
+  const events = await api('GET', `/events${q}`).catch(() => []);
+  const el = document.getElementById('events-list');
+  if (!events.length) { el.innerHTML = '<p class="text-muted small">勉強会がありません</p>'; return; }
+  el.innerHTML = `
+    <table class="table table-sm table-hover align-middle">
+      <thead><tr><th>タイトル</th><th>日時</th><th>状態</th><th></th></tr></thead>
+      <tbody>
+        ${events.map(ev => `
+          <tr>
+            <td>${ev.title}</td>
+            <td class="text-nowrap">${fmtDate(ev.scheduled_at)}</td>
+            <td>${statusBadge(ev.status)}</td>
+            <td>${ev.status === 'scheduled'
+              ? `<button class="btn btn-sm btn-outline-dark py-0 px-1" onclick="markDone(${ev.id})">完了</button>`
+              : ''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function createEvent() {
+  const team_id = Number(document.getElementById('event-team-select').value);
+  const title = document.getElementById('event-title').value.trim();
+  const scheduled_at = document.getElementById('event-datetime').value;
+  if (!team_id || !title || !scheduled_at) { toast('全項目を入力してください', 'warning'); return; }
+  try {
+    await api('POST', '/events', { team_id, title, scheduled_at });
+    toast('勉強会を作成しました');
+    document.getElementById('event-title').value = '';
+    document.getElementById('event-datetime').value = '';
+    loadEvents();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function markDone(eventId) {
+  try {
+    await api('PATCH', `/events/${eventId}/status`, { status: 'done' });
+    toast('完了にしました');
+    loadEvents();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── Attendance ────────────────────────────────────────────────────────────────
+
+async function loadAttendanceEventSelect() {
+  const events = await api('GET', '/events').catch(() => []);
+  await populateSelect('att-event-select', events, 'id', ev => `${ev.title} (${fmtDate(ev.scheduled_at)})`);
+}
+
+async function loadAttendance() {
+  const eventId = document.getElementById('att-event-select').value;
+  const el = document.getElementById('attendance-list');
+  if (!eventId) { el.innerHTML = ''; return; }
+  try {
+    const records = await api('GET', `/events/${eventId}/attendance`);
+    if (!records.length) { el.innerHTML = '<p class="text-muted small">メンバーがいません</p>'; return; }
+    el.innerHTML = `
+      <table class="table table-sm align-middle">
+        <thead><tr><th>名前</th><th>状態</th><th>回答</th></tr></thead>
+        <tbody>
+          ${records.map(r => `
+            <tr>
+              <td>${r.user.name}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td>
+                <button class="btn btn-yes btn-sm py-0 px-2 me-1" onclick="setAtt(${eventId},${r.user.id},'yes')">参加</button>
+                <button class="btn btn-no  btn-sm py-0 px-2"       onclick="setAtt(${eventId},${r.user.id},'no')">不参加</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function setAtt(eventId, userId, status) {
+  try {
+    await api('PUT', `/events/${eventId}/attendance`, { user_id: userId, status });
+    loadAttendance();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function notifyNoResponse() {
+  const eventId = document.getElementById('att-event-select').value;
+  if (!eventId) { toast('勉強会を選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/events/${eventId}/notify/no-response`);
+    toast('未回答者に通知しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function notifySummary() {
+  const eventId = document.getElementById('att-event-select').value;
+  if (!eventId) { toast('勉強会を選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/events/${eventId}/notify/summary`);
+    toast('サマリーを送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+bootstrap();
+</script>
+</body>
+</html>
