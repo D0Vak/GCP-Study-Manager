@@ -21,7 +21,9 @@ services:
 
       # ── LINE Messaging API（通知用）──
       - key: LINE_CHANNEL_ACCESS_TOKEN
-        value: ""
+        sync: false
+      - key: LINE_MESSAGING_CHANNEL_SECRET
+        sync: false     # Webhook署名検証用（Messaging APIチャンネルのSecret）
 
       # ── JWT・Cron ──
       - key: JWT_SECRET_KEY

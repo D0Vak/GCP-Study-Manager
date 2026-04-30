@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # LINE Messaging API（通知用チャンネル）
     line_channel_access_token: str = ""
+    line_messaging_channel_secret: str = ""  # Webhook署名検証用
 
     # JWT
     jwt_secret_key: str = "change-me-with-openssl-rand-hex-32"

@@ -8,6 +8,10 @@ class TeamCreate(BaseModel):
     line_group_id: str | None = None
 
 
+class TeamUpdate(BaseModel):
+    line_group_id: str | None = None
+
+
 class TeamMemberAdd(BaseModel):
     user_id: int
 

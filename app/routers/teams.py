@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import CurrentUser
 from app.database import get_db
 from app.models.user import User
-from app.schemas.team import TeamCreate, TeamMemberAdd, TeamResponse
+from app.schemas.team import TeamCreate, TeamMemberAdd, TeamResponse, TeamUpdate
 from app.schemas.user import UserResponse
 from app.services import team_service
 
@@ -19,6 +19,11 @@ def create_team(data: TeamCreate, db: Session = Depends(get_db)):
 @router.get("", response_model=list[TeamResponse])
 def list_teams(db: Session = Depends(get_db)):
     return team_service.list_teams(db)
+
+
+@router.patch("/{team_id}", response_model=TeamResponse)
+def update_team(team_id: int, data: TeamUpdate, db: Session = Depends(get_db)):
+    return team_service.update_team(db, team_id, data)
 
 
 @router.post("/{team_id}/members", status_code=201)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.team import Team, TeamMember
 from app.models.user import User
-from app.schemas.team import TeamCreate
+from app.schemas.team import TeamCreate, TeamUpdate
 
 
 def create_team(db: Session, data: TeamCreate) -> Team:
@@ -18,6 +18,17 @@ def create_team(db: Session, data: TeamCreate) -> Team:
 
 def list_teams(db: Session) -> list[Team]:
     return db.query(Team).all()
+
+
+def update_team(db: Session, team_id: int, data: TeamUpdate) -> Team:
+    team = db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="チームが見つかりません")
+    if data.line_group_id is not None:
+        team.line_group_id = data.line_group_id or None
+    db.commit()
+    db.refresh(team)
+    return team
 
 
 def add_member(db: Session, team_id: int, user_id: int) -> None:

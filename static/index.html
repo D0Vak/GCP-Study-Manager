@@ -122,6 +122,27 @@
           </div>
         </div>
       </div>
+
+      <!-- LINE Group Detection -->
+      <div class="row mt-3">
+        <div class="col-12">
+          <div class="card p-4">
+            <div class="d-flex align-items-center mb-2">
+              <h6 class="mb-0">Webhookで検出されたLINEグループ</h6>
+              <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="loadDetectedGroups()">更新</button>
+            </div>
+            <p class="text-muted small mb-3">
+              ① LINE DevelopersでMessaging APIチャンネルのWebhook URLを
+              <code id="webhook-url-hint">/webhook/line</code> に設定
+              → ② ボットをLINEグループに招待 → ③ グループで何かメッセージを送る
+              → ④「更新」でグループIDを取得してチームに割り当て
+            </p>
+            <div id="detected-groups-list">
+              <p class="text-muted small">「更新」ボタンを押してください</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Events ── -->
@@ -242,6 +263,9 @@ function showApp(user) {
   document.getElementById('user-avatar').textContent = initial;
   document.getElementById('user-name').textContent = user.name || user.email;
 
+  // WebhookのURLヒントを現在のオリジンで更新
+  document.getElementById('webhook-url-hint').textContent = `${location.origin}/webhook/line`;
+
   // 初期データロード
   loadDashboardTeams();
 }
@@ -292,7 +316,7 @@ function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (id === 'dashboard')  loadDashboardTeams();
-  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); }
+  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); loadDetectedGroups(); }
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
 }
@@ -529,6 +553,43 @@ async function notifySummary() {
   try {
     await api('POST', `/events/${eventId}/notify/summary`);
     toast('サマリーを送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── LINE Group Detection ──────────────────────────────────────────────────────
+
+async function loadDetectedGroups() {
+  const el = document.getElementById('detected-groups-list');
+  if (!el) return;
+  try {
+    const groups = await api('GET', '/webhook/line/groups');
+    if (!groups.length) {
+      el.innerHTML = '<p class="text-muted small">検出されたグループはありません。ボットをLINEグループに招待してメッセージを送ってください。</p>';
+      return;
+    }
+    const teams = await api('GET', '/teams').catch(() => []);
+    const teamOpts = teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    el.innerHTML = groups.map(g => `
+      <div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded flex-wrap">
+        <code class="small">${g.group_id}</code>
+        <span class="badge bg-secondary">${g.note}</span>
+        <select class="form-select form-select-sm ms-auto" style="max-width:160px" id="assign-team-${g.group_id}">
+          <option value="">-- チーム --</option>
+          ${teamOpts}
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="assignGroupToTeam('${g.group_id}')">このチームに設定</button>
+      </div>`).join('');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function assignGroupToTeam(groupId) {
+  const sel = document.getElementById(`assign-team-${groupId}`);
+  const teamId = sel ? sel.value : '';
+  if (!teamId) { toast('チームを選択してください', 'warning'); return; }
+  try {
+    await api('PATCH', `/teams/${teamId}`, { line_group_id: groupId });
+    toast('LINEグループIDをチームに設定しました');
+    loadTeamsList();
   } catch (e) { toast(e.message, 'danger'); }
 }
 
