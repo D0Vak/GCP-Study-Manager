@@ -105,6 +105,36 @@ def send_summary(db: Session, event: Event) -> None:
                 logger.info("[summary] %s: %s", user.name, body)
 
 
+def send_event_created(db: Session, event: Event) -> None:
+    body = (
+        f"【新しい勉強会のお知らせ】\n"
+        f"{event.title}\n"
+        f"日時: {event.scheduled_at.strftime('%Y/%m/%d %H:%M')}\n"
+        f"出欠の回答をお願いします。"
+    )
+    if event.team.line_group_id:
+        _push(event.team.line_group_id, body)
+    else:
+        for user in _members(db, event.team_id):
+            if user.line_id:
+                _push(user.line_id, body)
+            else:
+                logger.info("[event_created] %s: %s", user.name, body)
+
+
+def send_custom(db: Session, team, message: str) -> None:
+    if team.line_group_id:
+        _push(team.line_group_id, message)
+    else:
+        sent: set[str] = set()
+        for user in _members(db, team.id):
+            if user.line_id and user.line_id not in sent:
+                _push(user.line_id, message)
+                sent.add(user.line_id)
+            elif not user.line_id:
+                logger.info("[custom] %s: %s", user.name, message)
+
+
 def run_daily_reminders() -> None:
     """毎日 09:00 JST 実行 — 翌日のイベントにリマインド送信"""
     db: Session = SessionLocal()

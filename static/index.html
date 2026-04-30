@@ -56,6 +56,7 @@
       <button class="btn btn-outline-light btn-sm" onclick="showSection('teams')">チーム</button>
       <button class="btn btn-outline-light btn-sm" onclick="showSection('events')">勉強会</button>
       <button class="btn btn-outline-light btn-sm" onclick="showSection('attendance')">出欠</button>
+      <button class="btn btn-outline-light btn-sm" onclick="showSection('notify')">通知</button>
       <div id="user-info" class="d-flex align-items-center gap-2 ms-2">
         <span id="user-avatar" class="user-avatar">?</span>
         <span id="user-name" class="text-light small"></span>
@@ -167,6 +168,47 @@
               </select>
             </div>
             <div id="events-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Notify ── -->
+    <div id="notify" class="section">
+      <h4 class="mb-3">通知送信</h4>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 class="mb-3">カスタムメッセージ送信</h6>
+            <p class="text-muted small mb-3">
+              チームのLINEグループ（未設定の場合は個別メンバー）に任意のメッセージを送ります。
+            </p>
+            <select id="notify-team-select" class="form-select form-select-sm mb-2"></select>
+            <textarea id="notify-message" class="form-control form-control-sm mb-3" rows="5"
+              placeholder="送信するメッセージを入力..."></textarea>
+            <button class="btn btn-success btn-sm" onclick="sendCustomNotify()">LINEに送信</button>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card p-4">
+            <h6 class="mb-3">勉強会への通知</h6>
+            <p class="text-muted small mb-2">特定の勉強会に関する通知を手動で送ります。</p>
+            <select id="notify-event-select" class="form-select form-select-sm mb-3"
+              onchange="loadNotifyEventInfo()">
+              <option value="">-- 勉強会を選択 --</option>
+            </select>
+            <div id="notify-event-info" class="text-muted small mb-3"></div>
+            <div class="d-flex flex-column gap-2">
+              <button class="btn btn-outline-primary btn-sm" onclick="notifyEventCreated()">
+                📢 開催お知らせを送信
+              </button>
+              <button class="btn btn-outline-warning btn-sm" onclick="notifyNoResponseFromNotify()">
+                ⚠️ 未回答者に催促
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="notifySummaryFromNotify()">
+                📊 出欠サマリーを送信
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -319,6 +361,7 @@ function showSection(id) {
   if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); loadDetectedGroups(); }
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
+  if (id === 'notify')     loadNotifySelects();
 }
 
 function statusBadge(s) {
@@ -452,6 +495,10 @@ async function loadEventsTeamSelects() {
   const teams = await api('GET', '/teams').catch(() => []);
   await populateSelect('event-team-select', teams, 'id', t => t.name);
   await populateSelect('events-team-filter', teams, 'id', t => t.name);
+  // チームが1つだけなら自動選択
+  const sel = document.getElementById('event-team-select');
+  if (sel && teams.length === 1 && !sel.value) sel.value = String(teams[0].id);
+  if (!teams.length) toast('先にチームを作成してください（チームタブ）', 'warning');
 }
 
 async function loadEvents() {
@@ -481,7 +528,9 @@ async function createEvent() {
   const team_id = Number(document.getElementById('event-team-select').value);
   const title = document.getElementById('event-title').value.trim();
   const scheduled_at = document.getElementById('event-datetime').value;
-  if (!team_id || !title || !scheduled_at) { toast('全項目を入力してください', 'warning'); return; }
+  if (!team_id) { toast('チームを選択してください', 'warning'); return; }
+  if (!title)   { toast('タイトルを入力してください', 'warning'); return; }
+  if (!scheduled_at) { toast('日時を選択してください', 'warning'); return; }
   try {
     await api('POST', '/events', { team_id, title, scheduled_at });
     toast('勉強会を作成しました');
@@ -553,6 +602,68 @@ async function notifySummary() {
   try {
     await api('POST', `/events/${eventId}/notify/summary`);
     toast('サマリーを送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── Notify Tab ────────────────────────────────────────────────────────────────
+
+async function loadNotifySelects() {
+  const [teams, events] = await Promise.all([
+    api('GET', '/teams').catch(() => []),
+    api('GET', '/events').catch(() => []),
+  ]);
+  await populateSelect('notify-team-select', teams, 'id', t => t.name);
+  await populateSelect('notify-event-select', events, 'id',
+    ev => `${ev.title} (${fmtDate(ev.scheduled_at)})`);
+  if (teams.length === 1) {
+    const s = document.getElementById('notify-team-select');
+    if (s && !s.value) s.value = String(teams[0].id);
+  }
+}
+
+async function sendCustomNotify() {
+  const team_id = Number(document.getElementById('notify-team-select').value);
+  const message = document.getElementById('notify-message').value.trim();
+  if (!team_id) { toast('チームを選択してください', 'warning'); return; }
+  if (!message) { toast('メッセージを入力してください', 'warning'); return; }
+  try {
+    await api('POST', '/notify', { team_id, message });
+    toast('送信しました');
+    document.getElementById('notify-message').value = '';
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+function loadNotifyEventInfo() {
+  const sel = document.getElementById('notify-event-select');
+  const el = document.getElementById('notify-event-info');
+  const opt = sel.selectedOptions[0];
+  el.textContent = opt && opt.value ? opt.textContent : '';
+}
+
+async function notifyEventCreated() {
+  const eventId = document.getElementById('notify-event-select').value;
+  if (!eventId) { toast('勉強会を選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/events/${eventId}/notify/reminder`);
+    toast('開催お知らせを送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function notifyNoResponseFromNotify() {
+  const eventId = document.getElementById('notify-event-select').value;
+  if (!eventId) { toast('勉強会を選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/events/${eventId}/notify/no-response`);
+    toast('未回答者に催促を送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function notifySummaryFromNotify() {
+  const eventId = document.getElementById('notify-event-select').value;
+  if (!eventId) { toast('勉強会を選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/events/${eventId}/notify/summary`);
+    toast('出欠サマリーを送信しました');
   } catch (e) { toast(e.message, 'danger'); }
 }
 

@@ -16,7 +16,9 @@ router = APIRouter(prefix="/events", tags=["events"], dependencies=[CurrentUser]
 
 @router.post("", response_model=EventResponse, status_code=201)
 def create_event(data: EventCreate, db: Session = Depends(get_db)):
-    return event_service.create_event(db, data)
+    event = event_service.create_event(db, data)
+    notification_service.send_event_created(db, event)
+    return event
 
 
 @router.get("", response_model=list[EventResponse])
