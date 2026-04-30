@@ -12,18 +12,18 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 
-_DEV_EMAIL = "dev@localhost"
+_DEV_LINE_ID = "dev-user-local"
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ) -> User:
-    # ── Dev mode: Google OAuth 未設定時は自動でdevユーザーを返す ──
+    # Dev mode: LINE Login 未設定時は自動でdevユーザーを返す
     if not settings.auth_enabled:
-        user = db.query(User).filter(User.email == _DEV_EMAIL).first()
+        user = db.query(User).filter(User.line_id == _DEV_LINE_ID).first()
         if not user:
-            user = User(name="Dev User", email=_DEV_EMAIL)
+            user = User(name="Dev User", line_id=_DEV_LINE_ID)
             db.add(user)
             db.commit()
             db.refresh(user)
@@ -39,5 +39,4 @@ def get_current_user(
     return user
 
 
-# Shorthand alias for use in route signatures
 CurrentUser = Depends(get_current_user)

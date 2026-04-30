@@ -9,9 +9,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
-    google_id: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True, index=True)
-    line_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # LINE Login でログインすると自動設定される。通知の送信先にも使う
+    line_id: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True, index=True)
 
     team_memberships: Mapped[list["TeamMember"]] = relationship(back_populates="user")
     attendances: Mapped[list["Attendance"]] = relationship(back_populates="user")
