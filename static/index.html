@@ -626,15 +626,15 @@ async function loadTeamsList() {
         ${isAdmin ? `<button class="remove-btn" onclick="removeMember(${t.id},${m.id},'${m.name}')" title="削除"><i class="bi bi-x"></i></button>` : ''}
       </span>`).join('') || '<span class="text-muted small">メンバーなし</span>';
 
-    const adminButtons = isAdmin ? `
+    const adminButtons = `
       <div class="d-flex gap-1 mt-2">
         <button class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="openEditTeam(${t.id},'${t.name.replace(/'/g,"\\'")}','${(t.line_group_id||'').replace(/'/g,"\\'")}')">
           <i class="bi bi-pencil me-1"></i>編集
         </button>
-        <button class="btn btn-sm btn-outline-danger py-1 px-2" onclick="deleteTeam(${t.id},'${t.name.replace(/'/g,"\\'")}')">
+        ${isAdmin ? `<button class="btn btn-sm btn-outline-danger py-1 px-2" onclick="deleteTeam(${t.id},'${t.name.replace(/'/g,"\\'")}')">
           <i class="bi bi-trash me-1"></i>削除
-        </button>
-      </div>` : '';
+        </button>` : ''}
+      </div>`;
 
     el.innerHTML += `
       <div class="border rounded p-3 mb-3 bg-white shadow-sm">
@@ -759,10 +759,10 @@ async function loadEvents() {
         </tr></thead>
         <tbody>
           ${events.map(ev => {
-            const admin = _adminCache[ev.team_id];
-            const editBtn = admin ? `<button class="btn btn-sm btn-outline-secondary py-1 px-2 me-1" onclick="openEditEvent(${ev.id},'${ev.title.replace(/'/g,"\\'")}','${ev.scheduled_at}')"><i class="bi bi-pencil"></i></button>` : '';
-            const deleteBtn = admin ? `<button class="btn btn-sm btn-outline-danger py-1 px-2 me-1" onclick="deleteEvent(${ev.id},'${ev.title.replace(/'/g,"\\'")}')"><i class="bi bi-trash"></i></button>` : '';
-            const doneBtn = (admin && ev.status === 'scheduled') ? `<button class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="markDone(${ev.id})">完了</button>` : '';
+            const isAdmin = _adminCache[ev.team_id];
+            const editBtn = `<button class="btn btn-sm btn-outline-secondary py-1 px-2 me-1" onclick="openEditEvent(${ev.id},'${ev.title.replace(/'/g,"\\'")}','${ev.scheduled_at}')"><i class="bi bi-pencil"></i></button>`;
+            const deleteBtn = isAdmin ? `<button class="btn btn-sm btn-outline-danger py-1 px-2 me-1" onclick="deleteEvent(${ev.id},'${ev.title.replace(/'/g,"\\'")}')"><i class="bi bi-trash"></i></button>` : '';
+            const doneBtn = ev.status === 'scheduled' ? `<button class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="markDone(${ev.id})">完了</button>` : '';
             return `
             <tr>
               <td class="fw-bold">${ev.title}</td>
