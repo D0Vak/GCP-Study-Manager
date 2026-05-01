@@ -15,8 +15,9 @@ Base.metadata.create_all(bind=engine)
 
 # スキーママイグレーション: 既存DBに新カラムを安全に追加
 _migrations = [
-    # TeamMember.is_admin (デフォルト0=False、既存行は全員管理者扱いになる→後方互換)
-    "ALTER TABLE team_members ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0",
+    # TeamMember.is_admin (既存行は全員管理者扱いになる→後方互換)
+    # PostgreSQL は DEFAULT 0 を BOOLEAN に受け付けないため FALSE を使用
+    "ALTER TABLE team_members ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 with engine.connect() as _conn:

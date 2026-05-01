@@ -467,11 +467,17 @@ async function api(method, path, body) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkErr) {
+    console.error('[API] network error:', networkErr);
+    throw new Error('サーバーに接続できませんでした。しばらく待ってから再試行してください。');
+  }
 
   if (res.status === 401) {
     clearToken();
@@ -482,7 +488,15 @@ async function api(method, path, body) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || res.statusText);
+    console.error('[API] error response:', res.status, err);
+    // Pydantic v2 の validation error は detail が配列になる
+    let msg;
+    if (Array.isArray(err.detail)) {
+      msg = err.detail.map(e => e.msg || JSON.stringify(e)).join(' / ');
+    } else {
+      msg = err.detail || res.statusText;
+    }
+    throw new Error(msg);
   }
 
   const ct = res.headers.get('content-type') || '';
@@ -733,7 +747,16 @@ async function createUser() {
 async function loadEventsTeamSelects() {
   const teams = await api('GET', '/teams').catch(() => []);
   await populateSelect('event-team-select', teams, 'id', t => t.name);
-  await populateSelect('events-team-filter', teams, 'id', t => t.name);
+
+  // events-team-filter は「全チーム」オプションを保持する必要があるため個別に構築
+  const filterSel = document.getElementById('events-team-filter');
+  if (filterSel) {
+    const curFilter = filterSel.value;
+    filterSel.innerHTML = '<option value="">全チーム</option>' +
+      (teams || []).map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    if (curFilter) filterSel.value = curFilter;
+  }
+
   const sel = document.getElementById('event-team-select');
   if (sel && teams.length === 1 && !sel.value) sel.value = String(teams[0].id);
   if (!teams.length) toast('先にチームを作成してください（チームタブ）', 'warning');
@@ -817,13 +840,21 @@ async function createEvent() {
   if (!team_id) { toast('チームを選択してください', 'warning'); return; }
   if (!title)   { toast('タイトルを入力してください', 'warning'); return; }
   if (!scheduled_at) { toast('日時を選択してください', 'warning'); return; }
+
+  const btn = document.querySelector('[onclick="createEvent()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '作成中…'; }
   try {
     await api('POST', '/events', { team_id, title, scheduled_at });
-    toast('イベントを作成しました（LINEにボタン付き通知を送りました）');
+    toast('イベントを作成しました');
     document.getElementById('event-title').value = '';
     document.getElementById('event-datetime').value = '';
-    loadEvents();
-  } catch (e) { toast(e.message, 'danger'); }
+    await loadEvents();
+  } catch (e) {
+    console.error('[createEvent]', e);
+    toast(`作成に失敗しました: ${e.message}`, 'danger');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i>作成'; }
+  }
 }
 
 async function markDone(eventId) {

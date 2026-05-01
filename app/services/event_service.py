@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.models.event import Event, EventStatus
 from app.models.team import Team
 from app.schemas.event import EventCreate, EventUpdate
+
+_JST = timezone(timedelta(hours=9))
 
 
 def create_event(db: Session, data: EventCreate) -> Event:
@@ -33,12 +35,14 @@ def list_events(db: Session, team_id: int | None = None) -> list[Event]:
 def get_next_event(db: Session, team_id: int) -> Event | None:
     if not db.get(Team, team_id):
         raise HTTPException(status_code=404, detail="チームが見つかりません")
+    # DBにはJSTのナイーブdatetimeが保存されているためJSTの現在時刻と比較する
+    now_jst = datetime.now(_JST).replace(tzinfo=None)
     return (
         db.query(Event)
         .filter(
             Event.team_id == team_id,
             Event.status == EventStatus.SCHEDULED,
-            Event.scheduled_at >= datetime.now(),
+            Event.scheduled_at >= now_jst,
         )
         .order_by(Event.scheduled_at)
         .first()
