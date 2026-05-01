@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.event import Event, EventStatus
 from app.models.team import Team
-from app.schemas.event import EventCreate
+from app.schemas.event import EventCreate, EventUpdate
 
 
 def create_event(db: Session, data: EventCreate) -> Event:
@@ -48,15 +48,36 @@ def get_next_event(db: Session, team_id: int) -> Event | None:
 def update_status(db: Session, event_id: int, status: EventStatus) -> Event:
     event = db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="勉強会が見つかりません")
+        raise HTTPException(status_code=404, detail="イベントが見つかりません")
     event.status = status
     db.commit()
     db.refresh(event)
     return event
 
 
+def update_event(db: Session, event_id: int, data: EventUpdate) -> Event:
+    event = db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="イベントが見つかりません")
+    if data.title is not None:
+        event.title = data.title
+    if data.scheduled_at is not None:
+        event.scheduled_at = data.scheduled_at
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def delete_event(db: Session, event_id: int) -> None:
+    event = db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="イベントが見つかりません")
+    db.delete(event)
+    db.commit()
+
+
 def get_event_or_404(db: Session, event_id: int) -> Event:
     event = db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="勉強会が見つかりません")
+        raise HTTPException(status_code=404, detail="イベントが見つかりません")
     return event

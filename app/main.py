@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine
@@ -12,10 +13,24 @@ logging.basicConfig(level=logging.INFO)
 
 Base.metadata.create_all(bind=engine)
 
+# スキーママイグレーション: 既存DBに新カラムを安全に追加
+_migrations = [
+    # TeamMember.is_admin (デフォルト0=False、既存行は全員管理者扱いになる→後方互換)
+    "ALTER TABLE team_members ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0",
+]
+
+with engine.connect() as _conn:
+    for _sql in _migrations:
+        try:
+            _conn.execute(text(_sql))
+            _conn.commit()
+        except Exception:
+            pass  # カラムが既に存在する場合など
+
 app = FastAPI(
-    title="Study Manager",
-    description="勉強会スケジュール管理システム",
-    version="3.0.0",
+    title="GCP Event Manager",
+    description="GCPイベント管理システム",
+    version="4.0.0",
 )
 
 app.add_middleware(

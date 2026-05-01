@@ -12,8 +12,16 @@ class TeamUpdate(BaseModel):
     line_group_id: str | None = None
 
 
+class TeamRename(BaseModel):
+    name: str
+
+
 class TeamMemberAdd(BaseModel):
     user_id: int
+
+
+class TeamMemberResponse(UserResponse):
+    is_admin: bool = False
 
 
 class TeamResponse(BaseModel):

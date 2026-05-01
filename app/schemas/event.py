@@ -11,6 +11,11 @@ class EventCreate(BaseModel):
     scheduled_at: datetime
 
 
+class EventUpdate(BaseModel):
+    title: str | None = None
+    scheduled_at: datetime | None = None
+
+
 class EventStatusUpdate(BaseModel):
     status: EventStatus
 

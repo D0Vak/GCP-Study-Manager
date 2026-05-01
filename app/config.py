@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # CORS
     frontend_origin: str = "*"
 
+    # App base URL (used in LINE messages to generate links)
+    app_base_url: str = ""
+
     class Config:
         env_file = ".env"
 

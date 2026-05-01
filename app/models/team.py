@@ -22,6 +22,7 @@ class TeamMember(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(default=False)
 
     team: Mapped["Team"] = relationship(back_populates="members")
     user: Mapped["User"] = relationship(back_populates="team_memberships")

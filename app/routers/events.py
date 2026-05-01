@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_db
+from app.models.user import User
 from app.schemas.attendance import AttendanceRecord, AttendanceUpsert
-from app.schemas.event import EventCreate, EventResponse, EventStatusUpdate
+from app.schemas.event import EventCreate, EventResponse, EventStatusUpdate, EventUpdate
 from app.schemas.user import UserResponse
 from app.services import attendance_service, event_service, notification_service
 from app.services.event_service import get_event_or_404
+from app.services.team_service import require_admin
 
 router = APIRouter(prefix="/events", tags=["events"], dependencies=[CurrentUser])
 
@@ -15,9 +17,18 @@ router = APIRouter(prefix="/events", tags=["events"], dependencies=[CurrentUser]
 # ── Event CRUD ──────────────────────────────────────────────────────────────
 
 @router.post("", response_model=EventResponse, status_code=201)
-def create_event(data: EventCreate, db: Session = Depends(get_db)):
+def create_event(
+    data: EventCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import logging
+    require_admin(db, current_user.id, data.team_id)
     event = event_service.create_event(db, data)
-    notification_service.send_event_created(db, event)
+    try:
+        notification_service.send_event_created(db, event)
+    except Exception as exc:
+        logging.getLogger(__name__).error("send_event_created failed: %s", exc)
     return event
 
 
@@ -32,9 +43,39 @@ def get_next_event(team_id: int, db: Session = Depends(get_db)):
     return event_service.get_next_event(db, team_id)
 
 
+@router.patch("/{event_id}", response_model=EventResponse)
+def update_event(
+    event_id: int,
+    data: EventUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = get_event_or_404(db, event_id)
+    require_admin(db, current_user.id, event.team_id)
+    return event_service.update_event(db, event_id, data)
+
+
 @router.patch("/{event_id}/status", response_model=EventResponse)
-def update_status(event_id: int, data: EventStatusUpdate, db: Session = Depends(get_db)):
+def update_status(
+    event_id: int,
+    data: EventStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = get_event_or_404(db, event_id)
+    require_admin(db, current_user.id, event.team_id)
     return event_service.update_status(db, event_id, data.status)
+
+
+@router.delete("/{event_id}", status_code=204)
+def delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = get_event_or_404(db, event_id)
+    require_admin(db, current_user.id, event.team_id)
+    event_service.delete_event(db, event_id)
 
 
 # ── Attendance ───────────────────────────────────────────────────────────────
