@@ -943,17 +943,19 @@ async function deleteEvent(id, title) {
 }
 
 async function createEvent() {
-  const team_id = Number(document.getElementById('event-team-select').value);
-  const title = document.getElementById('event-title').value.trim();
-  let scheduled_at = document.getElementById('event-datetime').value;
-  if (scheduled_at && scheduled_at.length === 16) scheduled_at += ':00';
-  if (!team_id) { toast('チームを選択してください（先にチームタブでチームを作成してください）', 'warning'); return; }
-  if (!title)   { toast('タイトルを入力してください', 'warning'); return; }
-  if (!scheduled_at) { toast('日時を選択してください', 'warning'); return; }
-
   const btn = document.querySelector('[onclick="createEvent()"]');
   if (btn) { btn.disabled = true; btn.textContent = '作成中…'; }
   try {
+    const sel = document.getElementById('event-team-select');
+    const team_id = sel ? Number(sel.value) : 0;
+    const title = (document.getElementById('event-title')?.value || '').trim();
+    let scheduled_at = document.getElementById('event-datetime')?.value || '';
+    if (scheduled_at.length === 16) scheduled_at += ':00';
+
+    if (!team_id) { toast('チームを選択してください（先にチームタブでチームを作成してください）', 'warning'); return; }
+    if (!title)   { toast('タイトルを入力してください', 'warning'); return; }
+    if (!scheduled_at) { toast('日時を選択してください', 'warning'); return; }
+
     await api('POST', '/events', { team_id, title, scheduled_at });
     toast('イベントを作成しました');
     document.getElementById('event-title').value = '';
