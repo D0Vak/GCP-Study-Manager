@@ -223,6 +223,19 @@
         </div>
       </div>
 
+      <!-- User List -->
+      <div class="row mt-3">
+        <div class="col-12">
+          <div class="card p-3 p-md-4">
+            <div class="d-flex align-items-center mb-3">
+              <h6 class="mb-0 fw-bold">ユーザー一覧</h6>
+              <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="loadUsersList()"><i class="bi bi-arrow-clockwise me-1"></i>更新</button>
+            </div>
+            <div id="users-list"><p class="text-muted small">読み込み中...</p></div>
+          </div>
+        </div>
+      </div>
+
       <!-- LINE Group Detection -->
       <div class="row mt-3">
         <div class="col-12">
@@ -525,7 +538,7 @@ function showSection(id) {
   if (btn) btn.classList.add('active');
 
   if (id === 'dashboard')  loadDashboardTeams();
-  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); loadDetectedGroups(); }
+  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); loadDetectedGroups(); loadUsersList(); }
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
   if (id === 'notify')     loadNotifySelects();
@@ -707,6 +720,34 @@ async function loadUsersForSelect() {
   await populateSelect('member-user-select', users, 'id', u => u.name);
 }
 
+async function loadUsersList() {
+  const el = document.getElementById('users-list');
+  if (!el) return;
+  try {
+    const users = await api('GET', '/users');
+    if (!users.length) {
+      el.innerHTML = '<p class="text-muted small">ユーザーがいません。左の「ユーザー作成」から追加してください。</p>';
+      return;
+    }
+    el.innerHTML = `
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light"><tr>
+            <th class="rounded-start">名前</th>
+            <th class="rounded-end">LINE ID</th>
+          </tr></thead>
+          <tbody>
+            ${users.map(u => `
+              <tr>
+                <td class="fw-bold">${u.name}</td>
+                <td class="text-muted small font-monospace">${u.line_id ? `<code>${u.line_id}</code>` : '<span class="fst-italic">未設定</span>'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
 async function createTeam() {
   const name = document.getElementById('team-name').value.trim();
   if (!name) { toast('チーム名を入力してください', 'warning'); return; }
@@ -739,6 +780,7 @@ async function createUser() {
     document.getElementById('user-name').value = '';
     document.getElementById('user-line-id').value = '';
     loadUsersForSelect();
+    loadUsersList();
   } catch (e) { toast(e.message, 'danger'); }
 }
 
@@ -836,8 +878,9 @@ async function deleteEvent(id, title) {
 async function createEvent() {
   const team_id = Number(document.getElementById('event-team-select').value);
   const title = document.getElementById('event-title').value.trim();
-  const scheduled_at = document.getElementById('event-datetime').value;
-  if (!team_id) { toast('チームを選択してください', 'warning'); return; }
+  let scheduled_at = document.getElementById('event-datetime').value;
+  if (scheduled_at && scheduled_at.length === 16) scheduled_at += ':00';
+  if (!team_id) { toast('チームを選択してください（先にチームタブでチームを作成してください）', 'warning'); return; }
   if (!title)   { toast('タイトルを入力してください', 'warning'); return; }
   if (!scheduled_at) { toast('日時を選択してください', 'warning'); return; }
 

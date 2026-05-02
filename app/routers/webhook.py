@@ -111,8 +111,8 @@ def _handle_join(group_id: str, reply_token: str) -> None:
     base_url = settings.app_base_url.rstrip("/") if settings.app_base_url else ""
     msg = (
         f"勉強会管理ボットが参加しました！📚\n\n"
-        f"このグループのID:\n{group_id}\n\n"
-        f"管理画面の「チーム管理」→「Webhookで検出されたLINEグループ」から"
+        f"このグループのIDは\n{group_id}\nです。\n\n"
+        f"管理画面の「チーム管理」→「LINEグループ連携」から"
         f"このIDをチームに連携してください。"
     )
     if base_url:
@@ -144,6 +144,14 @@ async def line_webhook(
                 _handle_join(group_id, reply_token)
             elif event_type == "postback":
                 _handle_postback(event)
+            elif event_type == "message":
+                _save_group(group_id, f"type={event_type}")
+                text = event.get("message", {}).get("text", "")
+                if "グループID" in text:
+                    from app.services.notification_service import reply_text
+                    reply_text(reply_token, f"このグループのIDは\n{group_id}\nです。")
+                else:
+                    logger.info("LINE Group message: %s", group_id)
             else:
                 _save_group(group_id, f"type={event_type}")
                 logger.info("LINE Group event: %s (event=%s)", group_id, event_type)
