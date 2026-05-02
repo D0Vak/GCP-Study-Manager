@@ -156,6 +156,7 @@
       <div class="d-inline-flex gap-2">
         <button id="nav-dashboard" class="nav-btn active" onclick="showSection('dashboard')"><i class="bi bi-grid-fill me-2 opacity-75"></i>ダッシュボード</button>
         <button id="nav-teams" class="nav-btn" onclick="showSection('teams')"><i class="bi bi-people-fill me-2 opacity-75"></i>チーム</button>
+        <button id="nav-users" class="nav-btn" onclick="showSection('users')"><i class="bi bi-person-lines-fill me-2 opacity-75"></i>ユーザー</button>
         <button id="nav-events" class="nav-btn" onclick="showSection('events')"><i class="bi bi-calendar-event-fill me-2 opacity-75"></i>イベント</button>
         <button id="nav-attendance" class="nav-btn" onclick="showSection('attendance')"><i class="bi bi-check-circle-fill me-2 opacity-75"></i>出欠</button>
         <button id="nav-notify" class="nav-btn" onclick="showSection('notify')"><i class="bi bi-bell-fill me-2 opacity-75"></i>通知</button>
@@ -192,46 +193,18 @@
     <div id="teams" class="section">
       <h4 class="mb-4 fw-bold text-dark">チーム管理</h4>
       <div class="row g-3">
-        <div class="col-md-5">
+        <div class="col-md-4">
           <div class="card p-3 p-md-4">
             <h6 class="mb-3 fw-bold">チーム作成</h6>
             <input id="team-name" class="form-control mb-2" placeholder="チーム名">
             <button class="btn btn-primary btn-sm" onclick="createTeam()"><i class="bi bi-plus-lg me-1"></i>作成</button>
             <p class="text-muted small mt-2 mb-0">作成者が自動的に管理者になります</p>
           </div>
-
-          <div class="card p-4 mt-3">
-            <h6 class="mb-3 fw-bold">メンバー追加 <span class="badge-admin ms-1">管理者のみ</span></h6>
-            <select id="member-team-select" class="form-select mb-2"></select>
-            <select id="member-user-select" class="form-select mb-3"></select>
-            <button class="btn btn-primary btn-sm" onclick="addMember()"><i class="bi bi-person-plus-fill me-1"></i>追加</button>
-          </div>
-
-          <div class="card p-4 mt-3">
-            <h6 class="mb-3 fw-bold">ユーザー作成</h6>
-            <input id="user-name" class="form-control mb-2" placeholder="名前">
-            <input id="user-line-id" class="form-control mb-3" placeholder="LINE ID（任意）">
-            <button class="btn btn-secondary btn-sm" onclick="createUser()"><i class="bi bi-plus-lg me-1"></i>作成</button>
-          </div>
         </div>
-
-        <div class="col-md-7">
+        <div class="col-md-8">
           <div class="card p-3 p-md-4">
             <h6 class="mb-3 fw-bold">チーム一覧</h6>
             <div id="teams-list"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- User List -->
-      <div class="row mt-3">
-        <div class="col-12">
-          <div class="card p-3 p-md-4">
-            <div class="d-flex align-items-center mb-3">
-              <h6 class="mb-0 fw-bold">ユーザー一覧</h6>
-              <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="loadUsersList()"><i class="bi bi-arrow-clockwise me-1"></i>更新</button>
-            </div>
-            <div id="users-list"><p class="text-muted small">読み込み中...</p></div>
           </div>
         </div>
       </div>
@@ -256,6 +229,28 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Users ── -->
+    <div id="users" class="section">
+      <h4 class="mb-4 fw-bold text-dark">ユーザー管理</h4>
+      <div class="row g-3 mb-3">
+        <div class="col-md-5 col-lg-4">
+          <div class="card p-3 p-md-4">
+            <h6 class="mb-3 fw-bold">ユーザー作成</h6>
+            <input id="user-name" class="form-control mb-2" placeholder="名前">
+            <input id="user-line-id" class="form-control mb-3" placeholder="LINE ID（任意）">
+            <button class="btn btn-primary btn-sm" onclick="createUser()"><i class="bi bi-plus-lg me-1"></i>作成</button>
+          </div>
+        </div>
+      </div>
+      <div class="card p-3 p-md-4">
+        <div class="d-flex align-items-center mb-3">
+          <h6 class="mb-0 fw-bold">メンバー一覧</h6>
+          <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="loadUsersTable()"><i class="bi bi-arrow-clockwise me-1"></i>更新</button>
+        </div>
+        <div id="users-table"><p class="text-muted small">読み込み中...</p></div>
       </div>
     </div>
 
@@ -538,7 +533,8 @@ function showSection(id) {
   if (btn) btn.classList.add('active');
 
   if (id === 'dashboard')  loadDashboardTeams();
-  if (id === 'teams')      { loadTeamsList(); loadUsersForSelect(); loadDetectedGroups(); loadUsersList(); }
+  if (id === 'teams')      { loadTeamsList(); loadDetectedGroups(); }
+  if (id === 'users')      loadUsersTable();
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
   if (id === 'notify')     loadNotifySelects();
@@ -629,13 +625,8 @@ async function loadTeamsList() {
   // キャッシュクリア
   Object.keys(_adminCache).forEach(k => delete _adminCache[k]);
 
-  const [teams, users] = await Promise.all([
-    api('GET', '/teams').catch(() => []),
-    api('GET', '/users').catch(() => []),
-  ]);
-  await populateSelect('member-team-select', teams, 'id', t => t.name);
+  const teams = await api('GET', '/teams').catch(() => []);
   await populateSelect('event-team-select', teams, 'id', t => t.name);
-  await populateSelect('member-user-select', users, 'id', u => u.name);
 
   const el = document.getElementById('teams-list');
   if (!teams.length) { el.innerHTML = '<p class="text-muted small">チームがありません</p>'; return; }
@@ -715,36 +706,124 @@ async function removeMember(teamId, userId, name) {
   } catch (e) { toast(e.message, 'danger'); }
 }
 
-async function loadUsersForSelect() {
-  const users = await api('GET', '/users').catch(() => []);
-  await populateSelect('member-user-select', users, 'id', u => u.name);
-}
-
-async function loadUsersList() {
-  const el = document.getElementById('users-list');
+async function loadUsersTable() {
+  const el = document.getElementById('users-table');
   if (!el) return;
+  el.innerHTML = '<p class="text-muted small">読み込み中...</p>';
   try {
-    const users = await api('GET', '/users');
+    const [users, teams] = await Promise.all([
+      api('GET', '/users'),
+      api('GET', '/teams').catch(() => []),
+    ]);
+
+    // userTeams[userId] = [{teamId, teamName}]
+    const userTeams = {};
+    users.forEach(u => { userTeams[u.id] = []; });
+    await Promise.all(teams.map(async t => {
+      const members = await api('GET', `/teams/${t.id}/members`).catch(() => []);
+      members.forEach(m => {
+        if (userTeams[m.id] !== undefined)
+          userTeams[m.id].push({ teamId: t.id, teamName: t.name });
+      });
+    }));
+
     if (!users.length) {
-      el.innerHTML = '<p class="text-muted small">ユーザーがいません。左の「ユーザー作成」から追加してください。</p>';
+      el.innerHTML = '<p class="text-muted small">ユーザーがいません。上の「ユーザー作成」から追加してください。</p>';
       return;
     }
+
     el.innerHTML = `
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light"><tr>
-            <th class="rounded-start">名前</th>
-            <th class="rounded-end">LINE ID</th>
+            <th class="rounded-start" style="min-width:120px">名前</th>
+            <th style="min-width:160px">LINE ID</th>
+            <th style="min-width:180px">所属チーム</th>
+            <th style="min-width:200px">チームに追加</th>
+            <th class="text-end rounded-end"></th>
           </tr></thead>
           <tbody>
-            ${users.map(u => `
-              <tr>
-                <td class="fw-bold">${u.name}</td>
-                <td class="text-muted small font-monospace">${u.line_id ? `<code>${u.line_id}</code>` : '<span class="fst-italic">未設定</span>'}</td>
-              </tr>`).join('')}
+            ${users.map(u => {
+              const myTeams = userTeams[u.id] || [];
+              const myTeamIds = new Set(myTeams.map(t => t.teamId));
+              const available = teams.filter(t => !myTeamIds.has(t.id));
+              const initial = (u.name || '?').charAt(0).toUpperCase();
+
+              const teamTags = myTeams.length
+                ? myTeams.map(t => `
+                    <span class="member-tag">
+                      ${t.teamName}
+                      <button class="remove-btn" title="${t.teamName}から外す"
+                        onclick="removeUserFromTeam(${t.teamId},${u.id},'${t.teamName.replace(/'/g,"\\'")}','${u.name.replace(/'/g,"\\'")}')">
+                        <i class="bi bi-x"></i>
+                      </button>
+                    </span>`).join('')
+                : '<span class="text-muted small fst-italic">未所属</span>';
+
+              const addCol = available.length
+                ? `<div class="d-flex gap-1 align-items-center">
+                    <select class="form-select form-select-sm" style="max-width:150px" id="add-team-sel-${u.id}">
+                      <option value="">-- チーム --</option>
+                      ${available.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-sm btn-primary py-1 px-2"
+                      onclick="addUserToTeam(${u.id},'${u.name.replace(/'/g,"\\'")}')">
+                      <i class="bi bi-plus-lg"></i>
+                    </button>
+                  </div>`
+                : '<span class="text-muted small">全チーム参加済</span>';
+
+              return `
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="user-avatar" style="width:32px;height:32px;font-size:.85rem;flex-shrink:0">${initial}</span>
+                      <span class="fw-bold">${u.name}</span>
+                    </div>
+                  </td>
+                  <td class="small">${u.line_id ? `<code class="small">${u.line_id}</code>` : '<span class="text-muted fst-italic">未設定</span>'}</td>
+                  <td>${teamTags}</td>
+                  <td>${addCol}</td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-outline-danger py-1 px-2"
+                      onclick="deleteUser(${u.id},'${u.name.replace(/'/g,"\\'")}')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>`;
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function addUserToTeam(userId, userName) {
+  const sel = document.getElementById(`add-team-sel-${userId}`);
+  const teamId = sel ? sel.value : '';
+  if (!teamId) { toast('チームを選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/teams/${teamId}/members`, { user_id: userId });
+    toast(`${userName}をチームに追加しました`);
+    loadUsersTable();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function removeUserFromTeam(teamId, userId, teamName, userName) {
+  if (!confirm(`「${userName}」を「${teamName}」から外しますか？`)) return;
+  try {
+    await api('DELETE', `/teams/${teamId}/members/${userId}`);
+    toast(`${userName}を${teamName}から外しました`);
+    loadUsersTable();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function deleteUser(userId, userName) {
+  if (!confirm(`ユーザー「${userName}」を削除しますか？\nチームメンバーシップ・出欠データもすべて削除されます。`)) return;
+  try {
+    await api('DELETE', `/users/${userId}`);
+    toast(`${userName}を削除しました`);
+    loadUsersTable();
   } catch (e) { toast(e.message, 'danger'); }
 }
 
@@ -759,17 +838,6 @@ async function createTeam() {
   } catch (e) { toast(e.message, 'danger'); }
 }
 
-async function addMember() {
-  const team_id = document.getElementById('member-team-select').value;
-  const user_id = document.getElementById('member-user-select').value;
-  if (!team_id || !user_id) { toast('チームとユーザーを選択してください', 'warning'); return; }
-  try {
-    await api('POST', `/teams/${team_id}/members`, { user_id: Number(user_id) });
-    toast('メンバーを追加しました');
-    loadTeamsList();
-  } catch (e) { toast(e.message, 'danger'); }
-}
-
 async function createUser() {
   const name = document.getElementById('user-name').value.trim();
   const line_id = document.getElementById('user-line-id').value.trim() || null;
@@ -779,8 +847,7 @@ async function createUser() {
     toast('ユーザーを作成しました');
     document.getElementById('user-name').value = '';
     document.getElementById('user-line-id').value = '';
-    loadUsersForSelect();
-    loadUsersList();
+    loadUsersTable();
   } catch (e) { toast(e.message, 'danger'); }
 }
 

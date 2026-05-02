@@ -25,3 +25,12 @@ def list_users(
     _: User = CurrentUser,
 ):
     return user_service.list_users(db)
+
+
+@router.delete("/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = CurrentUser,
+):
+    user_service.delete_user(db, user_id)
