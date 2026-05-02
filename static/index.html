@@ -264,7 +264,7 @@
             <select id="event-team-select" class="form-select mb-2"></select>
             <input id="event-title" class="form-control mb-2" placeholder="タイトル">
             <input id="event-datetime" type="datetime-local" class="form-control mb-3">
-            <button class="btn btn-primary btn-sm" onclick="createEvent()"><i class="bi bi-plus-lg me-1"></i>作成</button>
+            <button class="btn btn-primary btn-sm" onclick="submitEvent()"><i class="bi bi-plus-lg me-1"></i>作成</button>
           </div>
         </div>
         <div class="col-md-7">
@@ -942,8 +942,8 @@ async function deleteEvent(id, title) {
   } catch (e) { toast(e.message, 'danger'); }
 }
 
-async function createEvent() {
-  const btn = document.querySelector('[onclick="createEvent()"]');
+async function submitEvent() {
+  const btn = document.querySelector('[onclick="submitEvent()"]');
   if (btn) { btn.disabled = true; btn.textContent = '作成中…'; }
   try {
     const sel = document.getElementById('event-team-select');
@@ -962,7 +962,7 @@ async function createEvent() {
     document.getElementById('event-datetime').value = '';
     await loadEvents();
   } catch (e) {
-    console.error('[createEvent]', e);
+    console.error('[submitEvent]', e);
     toast(`作成に失敗しました: ${e.message}`, 'danger');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i>作成'; }
