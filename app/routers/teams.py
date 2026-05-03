@@ -77,3 +77,8 @@ def remove_member(
 @router.get("/{team_id}/members", response_model=list[TeamMemberResponse])
 def list_members(team_id: int, db: Session = Depends(get_db)):
     return team_service.list_members(db, team_id)
+
+
+@router.get("/{team_id}/stats")
+def get_stats(team_id: int, db: Session = Depends(get_db)):
+    return team_service.get_team_stats(db, team_id)

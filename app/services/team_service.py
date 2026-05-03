@@ -100,6 +100,43 @@ def remove_member(db: Session, team_id: int, user_id: int) -> None:
     db.commit()
 
 
+def get_team_stats(db: Session, team_id: int) -> list[dict]:
+    from datetime import datetime, timezone
+    from app.models.attendance import Attendance, AttendanceStatus
+    from app.models.event import Event
+
+    team = db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="チームが見つかりません")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    past_events = db.query(Event).filter(
+        Event.team_id == team_id,
+        Event.scheduled_at < now,
+    ).all()
+    total = len(past_events)
+    event_ids = [e.id for e in past_events]
+
+    result = []
+    for m in team.members:
+        if not event_ids:
+            result.append({"id": m.user.id, "name": m.user.name, "total": 0, "attended": 0, "absent": 0, "pending": 0, "rate": None})
+            continue
+        attendances = db.query(Attendance).filter(
+            Attendance.event_id.in_(event_ids),
+            Attendance.user_id == m.user_id,
+        ).all()
+        att_map = {a.event_id: a.status for a in attendances}
+        attended = sum(1 for eid in event_ids if att_map.get(eid) == AttendanceStatus.YES)
+        absent   = sum(1 for eid in event_ids if att_map.get(eid) == AttendanceStatus.NO)
+        pending  = total - attended - absent
+        rate = round(attended / total * 100) if total > 0 else None
+        result.append({"id": m.user.id, "name": m.user.name, "total": total, "attended": attended, "absent": absent, "pending": pending, "rate": rate})
+
+    result.sort(key=lambda x: (x["rate"] is None, -(x["rate"] or 0)))
+    return result
+
+
 def list_members(db: Session, team_id: int) -> list[dict]:
     """メンバー一覧を is_admin フラグ付きで返す"""
     team = db.get(Team, team_id)

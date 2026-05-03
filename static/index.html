@@ -160,6 +160,7 @@
         <button id="nav-events" class="nav-btn" onclick="showSection('events')"><i class="bi bi-calendar-event-fill me-2 opacity-75"></i>イベント</button>
         <button id="nav-attendance" class="nav-btn" onclick="showSection('attendance')"><i class="bi bi-check-circle-fill me-2 opacity-75"></i>出欠</button>
         <button id="nav-notify" class="nav-btn" onclick="showSection('notify')"><i class="bi bi-bell-fill me-2 opacity-75"></i>通知</button>
+        <button id="nav-stats" class="nav-btn" onclick="showSection('stats')"><i class="bi bi-bar-chart-fill me-2 opacity-75"></i>統計</button>
       </div>
     </div>
   </div>
@@ -344,6 +345,20 @@
           </div>
         </div>
         <div id="attendance-list"></div>
+      </div>
+    </div>
+
+    <!-- ── Stats ── -->
+    <div id="stats" class="section">
+      <h4 class="mb-4 fw-bold text-dark">参加率統計</h4>
+      <div class="card p-3 p-md-4">
+        <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+          <select id="stats-team-select" class="form-select" style="max-width:260px" onchange="loadStats()">
+            <option value="">-- チームを選択 --</option>
+          </select>
+          <span class="text-muted small" id="stats-period"></span>
+        </div>
+        <div id="stats-content"><p class="text-muted small">チームを選択してください</p></div>
       </div>
     </div>
 
@@ -538,6 +553,7 @@ function showSection(id) {
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
   if (id === 'notify')     loadNotifySelects();
+  if (id === 'stats')      loadStatsTeamSelect();
 }
 
 function statusBadge(s) {
@@ -719,6 +735,61 @@ async function toggleAdmin(teamId, userId, name, currentIsAdmin) {
     Object.keys(_adminCache).forEach(k => delete _adminCache[k]);
     loadTeamsList();
   } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function loadStatsTeamSelect() {
+  const teams = await api('GET', '/teams').catch(() => []);
+  const sel = document.getElementById('stats-team-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">-- チームを選択 --</option>' +
+    teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  if (current) { sel.value = current; loadStats(); }
+}
+
+async function loadStats() {
+  const teamId = document.getElementById('stats-team-select').value;
+  const el = document.getElementById('stats-content');
+  const period = document.getElementById('stats-period');
+  if (!teamId) {
+    el.innerHTML = '<p class="text-muted small">チームを選択してください</p>';
+    period.textContent = '';
+    return;
+  }
+  el.innerHTML = '<p class="text-muted small">読み込み中...</p>';
+  try {
+    const stats = await api('GET', `/teams/${teamId}/stats`);
+    if (!stats.length) {
+      el.innerHTML = '<p class="text-muted small">メンバーがいません</p>';
+      period.textContent = '';
+      return;
+    }
+    const total = stats[0].total;
+    period.textContent = `過去のイベント ${total} 回`;
+    if (total === 0) {
+      el.innerHTML = '<p class="text-muted small">まだ終了したイベントがありません</p>';
+      return;
+    }
+    el.innerHTML = stats.map(s => {
+      const pct = s.rate ?? 0;
+      const color = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+      const rateLabel = s.rate !== null ? `${s.rate}%` : '-';
+      return `
+        <div class="mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="fw-semibold">${s.name}</span>
+            <span class="fw-bold fs-5" style="color:${color}">${rateLabel}</span>
+          </div>
+          <div class="progress mb-1" style="height:10px; border-radius:99px; background:#f3f4f6">
+            <div class="progress-bar" role="progressbar"
+              style="width:${pct}%; background:${color}; border-radius:99px; transition:width 0.8s ease">
+            </div>
+          </div>
+          <div class="text-muted" style="font-size:0.78rem">
+            ✅ 参加 ${s.attended}回 &nbsp;❌ 欠席 ${s.absent}回 &nbsp;⏳ 未回答 ${s.pending}回
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<p class="text-danger small">${e.message}</p>`; }
 }
 
 async function loadUsersTable() {
