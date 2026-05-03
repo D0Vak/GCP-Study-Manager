@@ -20,6 +20,10 @@ class TeamMemberAdd(BaseModel):
     user_id: int
 
 
+class TeamMemberUpdate(BaseModel):
+    is_admin: bool
+
+
 class TeamMemberResponse(UserResponse):
     is_admin: bool = False
 

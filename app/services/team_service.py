@@ -80,6 +80,18 @@ def add_member(db: Session, team_id: int, user_id: int, is_admin: bool = False) 
     db.commit()
 
 
+def set_member_admin(db: Session, team_id: int, user_id: int, is_admin: bool) -> None:
+    member = db.query(TeamMember).filter_by(team_id=team_id, user_id=user_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="メンバーが見つかりません")
+    if not is_admin and member.is_admin:
+        admin_count = db.query(TeamMember).filter_by(team_id=team_id, is_admin=True).count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="最後の管理者は降格できません")
+    member.is_admin = is_admin
+    db.commit()
+
+
 def remove_member(db: Session, team_id: int, user_id: int) -> None:
     member = db.query(TeamMember).filter_by(team_id=team_id, user_id=user_id).first()
     if not member:

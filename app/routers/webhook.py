@@ -46,10 +46,8 @@ def _handle_postback(event: dict) -> None:
     from app.models.event import Event
     from app.models.team import TeamMember
     from app.models.user import User
-    from app.services.notification_service import reply_text
-
     data_str = event.get("postback", {}).get("data", "")
-    reply_token = event.get("replyToken", "")
+
     source = event.get("source", {})
     line_user_id = source.get("userId", "")
 
@@ -75,16 +73,13 @@ def _handle_postback(event: dict) -> None:
     try:
         user = db.query(User).filter(User.line_id == line_user_id).first()
         if not user:
-            reply_text(reply_token, "ユーザーが見つかりません。先にWebアプリでLINEログインしてください。")
             return
 
         ev = db.get(Event, event_id)
         if not ev:
-            reply_text(reply_token, "勉強会が見つかりません。")
             return
 
         if not db.query(TeamMember).filter_by(team_id=ev.team_id, user_id=user.id).first():
-            reply_text(reply_token, "このチームのメンバーではありません。")
             return
 
         att_status = AttendanceStatus.YES if status_str == "yes" else AttendanceStatus.NO
@@ -96,8 +91,6 @@ def _handle_postback(event: dict) -> None:
             db.add(record)
         db.commit()
 
-        label = "参加" if status_str == "yes" else "欠席"
-        reply_text(reply_token, f"{user.name}さん、「{ev.title}」への{label}を受け付けました！✅")
     finally:
         db.close()
 

@@ -637,12 +637,16 @@ async function loadTeamsList() {
     const isAdmin = await _isAdmin(t.id);
     const anyAdmin = members.some(m => m.is_admin);
 
-    const memberTags = members.map(m => `
-      <span class="member-tag">
-        ${m.is_admin ? '<span class="badge-admin me-1">管理者</span>' : ''}
-        ${m.name}
-        ${isAdmin ? `<button class="remove-btn" onclick="removeMember(${t.id},${m.id},'${m.name}')" title="削除"><i class="bi bi-x"></i></button>` : ''}
-      </span>`).join('') || '<span class="text-muted small">メンバーなし</span>';
+    const memberTags = members.map(m => {
+      const safeName = m.name.replace(/'/g, "\\'");
+      const adminBtn = isAdmin
+        ? `<button class="remove-btn ms-1" onclick="toggleAdmin(${t.id},${m.id},'${safeName}',${m.is_admin})" title="${m.is_admin ? '管理者を外す' : '管理者にする'}"><i class="bi bi-${m.is_admin ? 'shield-fill-minus' : 'shield-fill-plus'}"></i></button>`
+        : '';
+      const removeBtn = isAdmin
+        ? `<button class="remove-btn" onclick="removeMember(${t.id},${m.id},'${safeName}')" title="削除"><i class="bi bi-x"></i></button>`
+        : '';
+      return `<span class="member-tag">${m.is_admin ? '<span class="badge-admin me-1">管理者</span>' : ''}${m.name}${adminBtn}${removeBtn}</span>`;
+    }).join('') || '<span class="text-muted small">メンバーなし</span>';
 
     const adminButtons = `
       <div class="d-flex gap-1 mt-2">
@@ -702,6 +706,17 @@ async function removeMember(teamId, userId, name) {
   try {
     await api('DELETE', `/teams/${teamId}/members/${userId}`);
     toast(`${name}を外しました`);
+    loadTeamsList();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function toggleAdmin(teamId, userId, name, currentIsAdmin) {
+  const action = currentIsAdmin ? '管理者を外す' : '管理者にする';
+  if (!confirm(`「${name}」を${action}しますか？`)) return;
+  try {
+    await api('PATCH', `/teams/${teamId}/members/${userId}`, { is_admin: !currentIsAdmin });
+    toast(`${name}を${action}しました`);
+    Object.keys(_adminCache).forEach(k => delete _adminCache[k]);
     loadTeamsList();
   } catch (e) { toast(e.message, 'danger'); }
 }

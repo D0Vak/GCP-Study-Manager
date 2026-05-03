@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.team import TeamCreate, TeamMemberAdd, TeamMemberResponse, TeamRename, TeamResponse, TeamUpdate
+from app.schemas.team import TeamCreate, TeamMemberAdd, TeamMemberResponse, TeamMemberUpdate, TeamRename, TeamResponse, TeamUpdate
 from app.services import team_service
 
 router = APIRouter(prefix="/teams", tags=["teams"], dependencies=[CurrentUser])
@@ -48,6 +48,19 @@ def delete_team(
 def add_member(team_id: int, data: TeamMemberAdd, db: Session = Depends(get_db)):
     team_service.add_member(db, team_id, data.user_id)
     return {"message": "メンバーを追加しました"}
+
+
+@router.patch("/{team_id}/members/{user_id}")
+def update_member(
+    team_id: int,
+    user_id: int,
+    data: TeamMemberUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    team_service.require_admin(db, current_user.id, team_id)
+    team_service.set_member_admin(db, team_id, user_id, data.is_admin)
+    return {"message": "更新しました"}
 
 
 @router.delete("/{team_id}/members/{user_id}", status_code=204)

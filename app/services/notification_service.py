@@ -117,7 +117,6 @@ def _build_event_flex(event: Event) -> dict:
                         "type": "postback",
                         "label": "✓ 参加する",
                         "data": f"action=attend&event_id={event.id}&status=yes",
-                        "displayText": "参加します！",
                     },
                 },
                 {
@@ -129,7 +128,6 @@ def _build_event_flex(event: Event) -> dict:
                         "type": "postback",
                         "label": "✗ 欠席する",
                         "data": f"action=attend&event_id={event.id}&status=no",
-                        "displayText": "欠席します",
                     },
                 },
             ],
