@@ -249,7 +249,7 @@ def run_daily_reminders() -> None:
     db: Session = SessionLocal()
     try:
         # DBの日時はJST入力前提なので、UTC+9でオフセット計算
-        now_jst = datetime.utcnow() + timedelta(hours=9)
+        now_jst = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=9)
         tomorrow_start = (now_jst + timedelta(days=1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
