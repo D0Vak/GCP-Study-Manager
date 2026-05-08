@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, cron, events, notify, teams, users, webhook
+from app.routers import auth, cron, events, line_admin, notify, teams, users, webhook
 
 logging.basicConfig(level=logging.INFO)
 
@@ -49,5 +49,6 @@ app.include_router(teams.router)
 app.include_router(events.router)
 app.include_router(notify.router)
 app.include_router(webhook.router)
+app.include_router(line_admin.router)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

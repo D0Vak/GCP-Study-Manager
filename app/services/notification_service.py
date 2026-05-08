@@ -13,6 +13,8 @@ from app.models.team import TeamMember
 logger = logging.getLogger(__name__)
 LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
 LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
+LINE_GROUP_MEMBERS_URL = "https://api.line.me/v2/bot/group/{group_id}/members/ids"
+LINE_GROUP_MEMBER_PROFILE_URL = "https://api.line.me/v2/bot/group/{group_id}/member/{user_id}"
 
 JST = timezone(timedelta(hours=9))
 
@@ -242,6 +244,50 @@ def send_custom(db: Session, team, message: str) -> None:
                 sent.add(user.line_id)
             elif not user.line_id:
                 logger.info("[custom] %s: %s", user.name, message)
+
+
+def get_group_member_profile(group_id: str, user_id: str) -> dict | None:
+    """グループメンバー1人のプロフィールを取得（全チャンネルで利用可能）"""
+    if not settings.line_channel_access_token:
+        return None
+    url = LINE_GROUP_MEMBER_PROFILE_URL.format(group_id=group_id, user_id=user_id)
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=_headers())
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as exc:
+        logger.error("LINE get profile error group=%s user=%s: %s", group_id, user_id, exc)
+    return None
+
+
+def fetch_group_member_ids(group_id: str) -> list[str]:
+    """
+    LINE APIでグループメンバーのIDを一括取得（認証済みチャンネルのみ利用可能）。
+    未認証チャンネルでは403が返るので空リストを返す。
+    """
+    if not settings.line_channel_access_token:
+        return []
+    ids: list[str] = []
+    url = LINE_GROUP_MEMBERS_URL.format(group_id=group_id)
+    params: dict = {}
+    try:
+        with httpx.Client(timeout=10) as client:
+            while True:
+                resp = client.get(url, headers=_headers(), params=params)
+                if resp.status_code == 403:
+                    logger.warning("fetch_group_member_ids: 403 – verified channel required")
+                    return []
+                resp.raise_for_status()
+                data = resp.json()
+                ids.extend(data.get("memberIds", []))
+                next_token = data.get("next")
+                if not next_token:
+                    break
+                params = {"start": next_token}
+    except Exception as exc:
+        logger.error("fetch_group_member_ids error group=%s: %s", group_id, exc)
+    return ids
 
 
 def run_daily_reminders() -> None:

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from app.config import settings
 from app.database import SessionLocal
 from app.models.detected_group import DetectedGroup
+from app.models.group_member import GroupMember
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhook", tags=["webhook"])
@@ -36,6 +37,27 @@ def _save_group(group_id: str, note: str) -> None:
         if not existing:
             db.add(DetectedGroup(group_id=group_id, note=note))
             db.commit()
+    finally:
+        db.close()
+
+
+def _upsert_group_member(group_id: str, line_user_id: str) -> None:
+    """グループメンバーのLINE IDを記録・更新する（メッセージを受信するたびに呼ぶ）"""
+    from datetime import datetime
+    db = SessionLocal()
+    try:
+        existing = (
+            db.query(GroupMember)
+            .filter_by(group_id=group_id, line_user_id=line_user_id)
+            .first()
+        )
+        if existing:
+            existing.last_seen = datetime.utcnow()
+        else:
+            db.add(GroupMember(group_id=group_id, line_user_id=line_user_id))
+        db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 
@@ -140,9 +162,15 @@ async def line_webhook(
             elif event_type == "message":
                 _save_group(group_id, f"type={event_type}")
                 text = event.get("message", {}).get("text", "")
+                line_user_id = source.get("userId", "")
+                if line_user_id:
+                    _upsert_group_member(group_id, line_user_id)
                 if "グループID" in text:
                     from app.services.notification_service import reply_text
                     reply_text(reply_token, f"このグループのIDは\n{group_id}\nです。")
+                elif "個人ID" in text:
+                    from app.services.notification_service import reply_text
+                    reply_text(reply_token, f"あなたのLINE IDは\n{line_user_id}\nです。")
                 else:
                     logger.info("LINE Group message: %s", group_id)
             else:
