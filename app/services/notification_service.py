@@ -246,6 +246,24 @@ def send_custom(db: Session, team, message: str) -> None:
                 logger.info("[custom] %s: %s", user.name, message)
 
 
+def _push_with_quick_reply(to: str, text: str, quick_reply_items: list[dict]) -> None:
+    if not settings.line_channel_access_token:
+        logger.info("[LINE skip – no token] to=%s | %s", to, text)
+        return
+    try:
+        with httpx.Client(timeout=10) as client:
+            client.post(LINE_PUSH_URL, headers=_headers(), json={
+                "to": to,
+                "messages": [{
+                    "type": "text",
+                    "text": text,
+                    "quickReply": {"items": quick_reply_items},
+                }],
+            }).raise_for_status()
+    except Exception as exc:
+        logger.error("LINE quick reply push error to=%s: %s", to, exc)
+
+
 def get_group_member_profile(group_id: str, user_id: str) -> dict | None:
     """グループメンバー1人のプロフィールを取得（全チャンネルで利用可能）"""
     if not settings.line_channel_access_token:

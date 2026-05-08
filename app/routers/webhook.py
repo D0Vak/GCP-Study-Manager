@@ -63,24 +63,36 @@ def _upsert_group_member(group_id: str, line_user_id: str) -> None:
 
 
 def _handle_postback(event: dict) -> None:
-    """Flex Messageのボタン押下 → 出欠を自動更新してreplyで確認メッセージを返す"""
-    from app.models.attendance import Attendance, AttendanceStatus
-    from app.models.event import Event
-    from app.models.team import TeamMember
-    from app.models.user import User
+    """ポストバックイベントのルーター"""
     data_str = event.get("postback", {}).get("data", "")
-
     source = event.get("source", {})
     line_user_id = source.get("userId", "")
 
-    # action=attend&event_id=N&status=yes|no
     try:
         params = dict(kv.split("=") for kv in data_str.split("&") if "=" in kv)
     except Exception:
         return
 
-    if params.get("action") != "attend":
+    action = params.get("action")
+
+    if action == "get_line_id":
+        # グループチャットを汚さずDMでLINE IDを返す
+        group_id = params.get("group_id", source.get("groupId", ""))
+        if line_user_id:
+            if group_id:
+                _upsert_group_member(group_id, line_user_id)
+            from app.services.notification_service import _push_text
+            _push_text(line_user_id, f"あなたのLINE IDは\n{line_user_id}\nです。\n\nこのIDを管理者にお伝えください。")
         return
+
+    if action != "attend":
+        return
+
+    # action=attend&event_id=N&status=yes|no
+    from app.models.attendance import Attendance, AttendanceStatus
+    from app.models.event import Event
+    from app.models.team import TeamMember
+    from app.models.user import User
 
     try:
         event_id = int(params["event_id"])
@@ -169,8 +181,9 @@ async def line_webhook(
                     from app.services.notification_service import reply_text
                     reply_text(reply_token, f"このグループのIDは\n{group_id}\nです。")
                 elif "個人ID" in text:
-                    from app.services.notification_service import reply_text
-                    reply_text(reply_token, f"あなたのLINE IDは\n{line_user_id}\nです。")
+                    # グループには返信せずDMで送ることで履歴を汚さない
+                    from app.services.notification_service import _push_text
+                    _push_text(line_user_id, f"あなたのLINE IDは\n{line_user_id}\nです。\n\nこのIDを管理者にお伝えください。")
                 else:
                     logger.info("LINE Group message: %s", group_id)
             else:

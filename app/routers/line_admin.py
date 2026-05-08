@@ -21,6 +21,7 @@ from app.models.team import Team
 from app.models.user import User
 from app.services.notification_service import (
     _push_text,
+    _push_with_quick_reply,
     fetch_group_member_ids,
     get_group_member_profile,
 )
@@ -145,15 +146,21 @@ def group_members_status(group_id: str, db: Session = Depends(get_db)):
 @router.post("/groups/{group_id}/prompt-members")
 def prompt_members_to_send_id(group_id: str):
     """
-    グループに「個人IDを送ってください」とプッシュする。
-    受動収集を促すための管理者操作用。
+    グループにクイックリプライ付きメッセージをプッシュする。
+    メンバーはボタンをタップするだけでLINE IDを取得できる。
     """
-    msg = (
-        "【管理者からのお知らせ】\n"
-        "メンバー登録のため、このトーク内に\n\n"
-        "　個人ID\n\n"
-        "と送信してください。\n"
-        "あなたのLINE IDがボットから返信されます。"
-    )
-    _push_text(group_id, msg)
+    msg = "【管理者からのお知らせ】\nメンバー登録のため、下のボタンをタップしてください。\nLINE IDがあなたのトークに個別に届きます（グループには表示されません）。"
+    quick_reply_items = [
+        {
+            "type": "action",
+            "action": {
+                # postback型はタップしてもグループに何も表示されない
+                "type": "postback",
+                "label": "自分のLINE IDを確認する",
+                "data": f"action=get_line_id&group_id={group_id}",
+                # displayText を省略することでグループ履歴に何も残らない
+            },
+        }
+    ]
+    _push_with_quick_reply(group_id, msg, quick_reply_items)
     return {"status": "sent"}
