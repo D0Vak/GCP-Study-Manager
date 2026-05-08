@@ -6,6 +6,10 @@ class UserCreate(BaseModel):
     line_id: str | None = None
 
 
+class UserLineIdUpdate(BaseModel):
+    line_id: str | None
+
+
 class UserResponse(BaseModel):
     id: int
     name: str

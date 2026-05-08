@@ -246,6 +246,31 @@
           </div>
         </div>
       </div>
+
+      <!-- LINEグループからID取得 -->
+      <div class="card p-3 p-md-4 mb-3">
+        <h6 class="mb-3 fw-bold"><i class="bi bi-people-fill text-success me-2"></i>LINEグループからメンバーID取得</h6>
+        <div class="line-flex-hint mb-3">
+          LINEグループIDが設定されているチームを選択して「取得」を押すと、そのグループで確認済みのメンバーIDと誰のものかを表示します。
+          「参加を促す」を押すとグループに「個人IDを送ってください」と通知が届きます。
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap mb-3">
+          <select id="line-group-team-select" class="form-select" style="max-width:220px">
+            <option value="">-- チームを選択 --</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadLineGroupMembers()">
+            <i class="bi bi-search me-1"></i>取得
+          </button>
+          <button class="btn btn-outline-success btn-sm" onclick="promptLineGroupMembers()">
+            <i class="bi bi-megaphone me-1"></i>参加を促す
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="fetchLineApiMembers()" title="認証済みチャンネルのみ">
+            <i class="bi bi-cloud-download me-1"></i>LINE APIから一括取得
+          </button>
+        </div>
+        <div id="line-group-members-result"></div>
+      </div>
+
       <div class="card p-3 p-md-4">
         <div class="d-flex align-items-center mb-3">
           <h6 class="mb-0 fw-bold">メンバー一覧</h6>
@@ -549,7 +574,7 @@ function showSection(id) {
 
   if (id === 'dashboard')  loadDashboardTeams();
   if (id === 'teams')      { loadTeamsList(); loadDetectedGroups(); }
-  if (id === 'users')      loadUsersTable();
+  if (id === 'users')      { loadUsersTable(); loadLineGroupTeamSelect(); }
   if (id === 'events')     { loadEventsTeamSelects(); loadEvents(); }
   if (id === 'attendance') loadAttendanceEventSelect();
   if (id === 'notify')     loadNotifySelects();
@@ -881,6 +906,154 @@ async function loadUsersTable() {
           </tbody>
         </table>
       </div>`;
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+// ── LINE Group Member ID Lookup ───────────────────────────────────────────────
+
+// チームセレクトをLINEグループIDありのものだけで初期化
+async function loadLineGroupTeamSelect() {
+  const teams = await api('GET', '/teams').catch(() => []);
+  const sel = document.getElementById('line-group-team-select');
+  if (!sel) return;
+  const withGroup = teams.filter(t => t.line_group_id);
+  sel.innerHTML = '<option value="">-- チームを選択 --</option>' +
+    withGroup.map(t => `<option value="${t.id}" data-group="${t.line_group_id}">${t.name} (${t.line_group_id.slice(0,12)}…)</option>`).join('');
+}
+
+function _selectedGroupId() {
+  const sel = document.getElementById('line-group-team-select');
+  const opt = sel && sel.selectedOptions[0];
+  return opt ? opt.dataset.group : null;
+}
+
+async function loadLineGroupMembers() {
+  const groupId = _selectedGroupId();
+  if (!groupId) { toast('LINEグループIDが設定されているチームを選択してください', 'warning'); return; }
+  const el = document.getElementById('line-group-members-result');
+  el.innerHTML = '<p class="text-muted small">取得中...</p>';
+  try {
+    const [status, allUsers] = await Promise.all([
+      api('GET', `/line-admin/groups/${encodeURIComponent(groupId)}/members-status`),
+      api('GET', '/users'),
+    ]);
+    _renderLineGroupResult(status, allUsers);
+  } catch (e) { el.innerHTML = `<p class="text-danger small">${e.message}</p>`; }
+}
+
+function _renderLineGroupResult(status, allUsers) {
+  const el = document.getElementById('line-group-members-result');
+  const { line_members, no_line_id_users } = status;
+
+  if (!line_members.length && !no_line_id_users.length) {
+    el.innerHTML = '<p class="text-muted small">まだメンバーIDが収集されていません。「参加を促す」でグループに通知してください。</p>';
+    return;
+  }
+
+  // 未紐付けユーザーのセレクトオプション（各行で使い回す）
+  const userOpts = allUsers
+    .filter(u => !u.line_id)
+    .map(u => `<option value="${u.id}">${u.name}</option>`)
+    .join('');
+
+  let html = '';
+
+  if (line_members.length) {
+    html += `
+    <div class="table-responsive mb-3">
+      <table class="table table-hover align-middle mb-0" style="font-size:0.9rem">
+        <thead class="table-light"><tr>
+          <th class="rounded-start">LINE表示名</th>
+          <th>LINE ID</th>
+          <th>最終確認</th>
+          <th class="rounded-end">紐付けユーザー</th>
+        </tr></thead>
+        <tbody>
+          ${line_members.map(m => {
+            const shortId = m.line_user_id.slice(0, 8) + '…';
+            const dateStr = m.last_seen ? new Date(m.last_seen).toLocaleDateString('ja-JP') : '-';
+            const displayName = m.display_name || '<span class="text-muted fst-italic">名前なし</span>';
+
+            let userCell;
+            if (m.matched_user) {
+              userCell = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">✅ ${m.matched_user.name}</span>`;
+            } else {
+              userCell = `
+                <div class="d-flex gap-1 align-items-center">
+                  <select class="form-select form-select-sm" style="max-width:140px" id="link-user-${m.line_user_id}">
+                    <option value="">-- 選択 --</option>
+                    ${userOpts}
+                  </select>
+                  <button class="btn btn-sm btn-outline-primary py-1 px-2"
+                    onclick="linkLineId('${m.line_user_id}','${m.display_name || ''}')">
+                    <i class="bi bi-link-45deg"></i>紐付け
+                  </button>
+                </div>`;
+            }
+            return `
+              <tr>
+                <td>${displayName}</td>
+                <td>
+                  <code class="small" title="${m.line_user_id}">${shortId}</code>
+                  <button class="btn btn-sm p-0 ms-1 text-muted" title="コピー"
+                    onclick="navigator.clipboard.writeText('${m.line_user_id}').then(()=>toast('コピーしました','info'))">
+                    <i class="bi bi-clipboard" style="font-size:.8rem"></i>
+                  </button>
+                </td>
+                <td class="text-muted">${dateStr}</td>
+                <td>${userCell}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  if (no_line_id_users.length) {
+    html += `
+    <div class="border rounded p-2 bg-warning bg-opacity-10">
+      <p class="small fw-bold text-warning-emphasis mb-1"><i class="bi bi-exclamation-triangle me-1"></i>LINE ID未設定のチームメンバー</p>
+      <div class="d-flex flex-wrap gap-2">
+        ${no_line_id_users.map(u => `<span class="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning border-opacity-25">${u.name}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+async function linkLineId(lineUserId, displayName) {
+  const sel = document.getElementById(`link-user-${lineUserId}`);
+  const userId = sel ? sel.value : '';
+  if (!userId) { toast('紐付けるユーザーを選択してください', 'warning'); return; }
+  try {
+    await api('PATCH', `/users/${userId}/line-id`, { line_id: lineUserId });
+    toast(`LINE ID を紐付けました（${displayName || lineUserId}）`);
+    loadLineGroupMembers();
+    loadUsersTable();
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function promptLineGroupMembers() {
+  const groupId = _selectedGroupId();
+  if (!groupId) { toast('LINEグループIDが設定されているチームを選択してください', 'warning'); return; }
+  try {
+    await api('POST', `/line-admin/groups/${encodeURIComponent(groupId)}/prompt-members`);
+    toast('グループに「個人IDを送ってください」と送信しました');
+  } catch (e) { toast(e.message, 'danger'); }
+}
+
+async function fetchLineApiMembers() {
+  const groupId = _selectedGroupId();
+  if (!groupId) { toast('LINEグループIDが設定されているチームを選択してください', 'warning'); return; }
+  try {
+    const result = await api('POST', `/line-admin/groups/${encodeURIComponent(groupId)}/fetch-members`);
+    if (result.error === 'requires_verified_channel') {
+      toast('LINE APIからの一括取得は認証済み公式アカウントのみ利用可能です。「参加を促す」をお使いください。', 'warning');
+    } else {
+      toast(`LINE APIから ${result.total_fetched} 件取得（新規: ${result.saved} 件）`);
+      loadLineGroupMembers();
+    }
   } catch (e) { toast(e.message, 'danger'); }
 }
 

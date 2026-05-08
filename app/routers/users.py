@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserLineIdUpdate, UserResponse
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -25,6 +25,16 @@ def list_users(
     _: User = CurrentUser,
 ):
     return user_service.list_users(db)
+
+
+@router.patch("/{user_id}/line-id", response_model=UserResponse)
+def update_user_line_id(
+    user_id: int,
+    data: UserLineIdUpdate,
+    db: Session = Depends(get_db),
+    _: User = CurrentUser,
+):
+    return user_service.update_line_id(db, user_id, data)
 
 
 @router.delete("/{user_id}", status_code=204)

@@ -12,14 +12,17 @@ POST /line-admin/groups/{group_id}/prompt-members
 """
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models.group_member import GroupMember
+from app.models.team import Team
+from app.models.user import User
 from app.services.notification_service import (
+    _push_text,
     fetch_group_member_ids,
     get_group_member_profile,
-    _push_text,
 )
 
 router = APIRouter(prefix="/line-admin", tags=["line-admin"])
@@ -85,6 +88,58 @@ def fetch_members_from_line_api(group_id: str):
         db.close()
 
     return {"saved": saved, "total_fetched": len(ids)}
+
+
+@router.get("/groups/{group_id}/members-status")
+def group_members_status(group_id: str, db: Session = Depends(get_db)):
+    """
+    グループIDを元に：
+    - DBに蓄積されたLINEメンバーIDと、それに紐付くユーザー情報
+    - そのグループを持つチームのメンバーのうちLINE ID未設定のユーザー
+    を返す。
+    """
+    # このgroup_idを持つチームを検索
+    team = db.query(Team).filter(Team.line_group_id == group_id).first()
+
+    # DBに蓄積されたグループメンバー
+    group_members = (
+        db.query(GroupMember)
+        .filter_by(group_id=group_id)
+        .order_by(GroupMember.first_seen)
+        .all()
+    )
+
+    # LINE IDでユーザーを逆引きするマップ
+    all_users = db.query(User).all()
+    line_id_to_user = {u.line_id: u for u in all_users if u.line_id}
+
+    members_result = []
+    for gm in group_members:
+        matched = line_id_to_user.get(gm.line_user_id)
+        members_result.append({
+            "line_user_id": gm.line_user_id,
+            "display_name": gm.display_name,
+            "last_seen": gm.last_seen,
+            "matched_user": {"id": matched.id, "name": matched.name} if matched else None,
+        })
+
+    # チームメンバーのうちLINE ID未設定のユーザー
+    no_line_id_users = []
+    if team:
+        from app.models.team import TeamMember
+        team_user_ids = {m.user_id for m in db.query(TeamMember).filter_by(team_id=team.id).all()}
+        no_line_id_users = [
+            {"id": u.id, "name": u.name}
+            for u in all_users
+            if u.id in team_user_ids and not u.line_id
+        ]
+
+    return {
+        "group_id": group_id,
+        "team": {"id": team.id, "name": team.name} if team else None,
+        "line_members": members_result,
+        "no_line_id_users": no_line_id_users,
+    }
 
 
 @router.post("/groups/{group_id}/prompt-members")
