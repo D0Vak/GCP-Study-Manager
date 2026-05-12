@@ -67,6 +67,7 @@ def _handle_postback(event: dict) -> None:
     data_str = event.get("postback", {}).get("data", "")
     source = event.get("source", {})
     line_user_id = source.get("userId", "")
+    reply_token = event.get("replyToken", "")
 
     try:
         params = dict(kv.split("=") for kv in data_str.split("&") if "=" in kv)
@@ -124,6 +125,11 @@ def _handle_postback(event: dict) -> None:
             record = Attendance(event_id=event_id, user_id=user.id, status=att_status)
             db.add(record)
         db.commit()
+
+        if reply_token:
+            from app.services.notification_service import reply_text
+            status_ja = "参加" if status_str == "yes" else "欠席"
+            reply_text(reply_token, f"「{ev.title}」に{status_ja}で回答しました！")
 
     finally:
         db.close()

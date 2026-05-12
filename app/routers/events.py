@@ -23,10 +23,6 @@ router = APIRouter(prefix="/events", tags=["events"], dependencies=[CurrentUser]
 @router.post("", response_model=EventResponse, status_code=201)
 def create_event(data: EventCreate, db: Session = Depends(get_db)):
     event = event_service.create_event(db, data)
-    try:
-        notification_service.send_event_created(db, event)
-    except Exception as exc:
-        logger.error("send_event_created failed: %s", exc)
     return event
 
 

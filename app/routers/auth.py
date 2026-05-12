@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -13,7 +16,27 @@ from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_pending_states: set[str] = set()
+_STATE_TTL = 600  # 10 minutes
+
+
+def _create_state() -> str:
+    nonce = secrets.token_urlsafe(16)
+    ts = str(int(time.time()))
+    payload = f"{nonce}.{ts}"
+    sig = hmac.new(settings.jwt_secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def _verify_state(state: str) -> bool:
+    try:
+        nonce, ts, sig = state.rsplit(".", 2)
+        payload = f"{nonce}.{ts}"
+        expected = hmac.new(settings.jwt_secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return False
+        return int(time.time()) - int(ts) <= _STATE_TTL
+    except Exception:
+        return False
 
 
 @router.get("/mode")
@@ -25,9 +48,7 @@ def auth_mode():
 def line_login():
     if not settings.auth_enabled:
         raise HTTPException(status_code=503, detail="LINE Login is not configured")
-    state = secrets.token_urlsafe(16)
-    _pending_states.add(state)
-    return RedirectResponse(build_auth_url(state))
+    return RedirectResponse(build_auth_url(_create_state()))
 
 
 @router.get("/callback")
@@ -36,9 +57,8 @@ def line_callback(
     state: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    if state not in _pending_states:
+    if not _verify_state(state):
         raise HTTPException(status_code=400, detail="Invalid or expired state")
-    _pending_states.discard(state)
 
     try:
         token_data = exchange_code(code)
